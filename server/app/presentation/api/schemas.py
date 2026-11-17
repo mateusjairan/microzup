@@ -2,6 +2,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.domain.entities.message import Message
 from app.domain.entities.user import User
 
 
@@ -70,3 +71,60 @@ class SectorOut(BaseModel):
     name: str
     slug: str
     description: str | None
+
+
+class ConversationOut(BaseModel):
+    id: UUID
+    kind: str
+    name: str | None
+    sector_id: UUID | None
+
+
+class MessageOut(BaseModel):
+    id: UUID
+    seq: int
+    conversation_id: UUID
+    sender_id: UUID
+    client_id: str
+    body: str
+    created_at: str
+    edited_at: str | None
+    deleted_at: str | None
+
+    @classmethod
+    def from_message(cls, message: Message) -> "MessageOut":
+        return cls(
+            id=message.id,
+            seq=message.seq,
+            conversation_id=message.conversation_id,
+            sender_id=message.sender_id,
+            client_id=message.client_id,
+            body=message.body,
+            created_at=message.created_at.isoformat(),
+            edited_at=message.edited_at.isoformat() if message.edited_at else None,
+            deleted_at=message.deleted_at.isoformat() if message.deleted_at else None,
+        )
+
+
+class ConversationSummaryOut(BaseModel):
+    conversation: ConversationOut
+    unread_count: int
+    last_message: MessageOut | None
+
+
+class SendMessageIn(BaseModel):
+    conversation_id: UUID
+    client_id: str
+    body: str
+
+
+class EditMessageIn(BaseModel):
+    body: str
+
+
+class MarkReadIn(BaseModel):
+    last_read_seq: int
+
+
+class OpenDmIn(BaseModel):
+    user_id: UUID

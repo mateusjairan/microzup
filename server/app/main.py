@@ -9,10 +9,15 @@ from app.core.compat import configure_event_loop
 from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging
 from app.infrastructure.db.session import create_engine, create_session_factory
+from app.infrastructure.events import InMemoryEventBus
 from app.presentation.api.admin import router as admin_router
 from app.presentation.api.auth import me_router
 from app.presentation.api.auth import router as auth_router
+from app.presentation.api.conversations import router as conversations_router
 from app.presentation.api.health import router as health_router
+from app.presentation.api.messages import router as messages_router
+from app.presentation.api.ws import router as ws_router
+from app.presentation.ws.hub import WebSocketHub
 
 
 @asynccontextmanager
@@ -21,6 +26,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_engine(settings.database_url)
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
+
+    event_bus = InMemoryEventBus()
+    hub = WebSocketHub()
+    event_bus.subscribe(hub.on_event)
+    app.state.event_bus = event_bus
+    app.state.hub = hub
+    app.state.ws_tickets = {}
+
     try:
         yield
     finally:
@@ -47,6 +60,9 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(me_router)
     app.include_router(admin_router)
+    app.include_router(conversations_router)
+    app.include_router(messages_router)
+    app.include_router(ws_router)
     return app
 
 

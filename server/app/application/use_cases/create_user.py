@@ -2,12 +2,13 @@ from dataclasses import dataclass
 from typing import cast
 from uuid import UUID
 
+from app.domain.entities.conversation import Conversation, ConversationMember
 from app.domain.entities.sector import Sector
 from app.domain.entities.user import Password, Role, User, Username
 from app.domain.exceptions import NotFoundError, UserAlreadyExists
 from app.domain.ports.audit import AuditLogSink
 from app.domain.ports.clock import Clock
-from app.domain.ports.repositories import SectorRepository, UserRepository
+from app.domain.ports.repositories import ConversationRepository, SectorRepository, UserRepository
 from app.domain.ports.security import PasswordHasher
 from app.domain.ports.unit_of_work import UnitOfWork
 
@@ -32,6 +33,7 @@ class CreateUser:
         audit: AuditLogSink,
         uow: UnitOfWork,
         clock: Clock,
+        conversations: ConversationRepository | None = None,
     ) -> None:
         self._users = users
         self._sectors = sectors
@@ -39,6 +41,7 @@ class CreateUser:
         self._audit = audit
         self._uow = uow
         self._clock = clock
+        self._conversations = conversations
 
     async def execute(self, command: CreateUserCommand) -> User:
         username = Username(command.username)
@@ -70,6 +73,16 @@ class CreateUser:
 
         async with self._uow:
             await self._users.add(user)
+            if self._conversations is not None and user.sector_id is not None:
+                channel = await self._conversations.get_channel_by_sector(user.sector_id)
+                if channel is None:
+                    channel = Conversation.create_channel(
+                        user.sector_id, user.display_name, command.actor_id, self._clock.now()
+                    )
+                    await self._conversations.add(channel)
+                await self._conversations.add_member(
+                    ConversationMember.create(channel.id, user.id, self._clock.now())
+                )
             await self._audit.record(
                 "user.create",
                 "user",

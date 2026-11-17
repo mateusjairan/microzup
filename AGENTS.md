@@ -7,7 +7,7 @@ Leia este arquivo antes de qualquer alteração. Ele prevalece sobre hábitos ge
 
 Microzup é um **chat corporativo farmacêutico** para uso na rede local (LAN) da empresa: mensagens e arquivos entre membros de equipe e setores. O produto prioriza rastreabilidade, autoria preservada e ruído baixo — não é um mensageiro de consumo.
 
-**Estado atual:** M1 concluído — identidade e autenticação (usuários, login/refresh/logout, Argon2id, JWT, auditoria, CLI `create-admin`). Próximo marco: M2 (conversas e tempo real).
+**Estado atual:** M2 concluído — conversas (canais por setor, DMs), mensagens com `seq`, idempotência, edição/exclusão lógica, `EventBus` + WebSocket (ticket de uso único, presença, typing). Próximo marco: M3 (arquivos).
 
 **Fontes de verdade (leia antes de decidir arquitetura):**
 

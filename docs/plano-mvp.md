@@ -584,7 +584,7 @@ Regra: variável nova entra em `.env.example`, nesta tabela e em `config.py` na 
 |---|---|---|
 | **M0 — Fundação** ✅ | Repo, `pyproject`, ruff/mypy, `docker-compose` Postgres 17, Alembic baseline, esqueleto em camadas, `dev.ps1`, healthcheck, testes unit/integration/api | 2–3 d |
 | **M1 — Identidade** ✅ | `User`/`Session`/`AuditLog`, Argon2id, login/refresh/logout, `create-admin`, autorização admin, testes unit/integration/api | 3–4 d |
-| **M2 — Conversas** | Canais, DMs, `SendMessage`, paginação por `seq`, `EventBus` + WS hub, presença, não lidas | 5–6 d |
+| **M2 — Conversas** ✅ | Canais por setor, DMs, `SendMessage` idempotente, paginação por `seq`, `EventBus` + WS (ticket, presença, typing), não lidas, testes unit/integration/api | 5–6 d |
 | **M3 — Arquivos** | Upload streaming, dedupe, download autorizado, thumbnails, limites | 3–4 d |
 | **M4 — Cliente desktop** | UI completa (ver `plano-frontend.md`, F4–F6), notificações, bandeja, instalador NSIS, E2E | 6–7 d |
 | **M5 — Endurecimento** | Auditoria visível, busca, backup/restore, serviço Windows, piloto com 1 setor | 3–4 d |

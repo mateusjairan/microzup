@@ -6,16 +6,29 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.application.use_cases.conversations import ListConversations, OpenDirectMessage
 from app.application.use_cases.create_sector import CreateSector
 from app.application.use_cases.create_user import CreateUser
 from app.application.use_cases.login import Login
 from app.application.use_cases.logout import Logout
+from app.application.use_cases.messages import (
+    DeleteMessage,
+    EditMessage,
+    ListMessages,
+    MarkRead,
+    SendMessage,
+)
 from app.application.use_cases.refresh import Refresh
 from app.application.use_cases.update_user import UpdateUser
 from app.config import Settings
 from app.domain.entities.user import User
+from app.domain.policies.conversation_access import ConversationAccessPolicy
+from app.domain.ports.events import EventBus
 from app.infrastructure.clock import SystemClock
 from app.infrastructure.db.repositories.audit import SqlAlchemyAuditSink
+from app.infrastructure.db.repositories.conversations import SqlAlchemyConversationRepository
+from app.infrastructure.db.repositories.message_reads import SqlAlchemyMessageReadRepository
+from app.infrastructure.db.repositories.messages import SqlAlchemyMessageRepository
 from app.infrastructure.db.repositories.sectors import SqlAlchemySectorRepository
 from app.infrastructure.db.repositories.sessions import SqlAlchemySessionRepository
 from app.infrastructure.db.repositories.users import SqlAlchemyUserRepository
@@ -49,11 +62,16 @@ def _access_issuer(request: Request) -> JwtAccessTokenIssuer:
     )
 
 
+def _bus(request: Request) -> EventBus:
+    return cast(EventBus, request.app.state.event_bus)
+
+
 def get_create_sector(session: SessionDep) -> CreateSector:
     return CreateSector(
         sectors=SqlAlchemySectorRepository(session),
         uow=SqlAlchemyUnitOfWork(session),
         clock=SystemClock(),
+        conversations=SqlAlchemyConversationRepository(session),
     )
 
 
@@ -68,6 +86,7 @@ def get_create_user(request: Request, session: SessionDep) -> CreateUser:
         audit=SqlAlchemyAuditSink(session),
         uow=SqlAlchemyUnitOfWork(session),
         clock=SystemClock(),
+        conversations=SqlAlchemyConversationRepository(session),
     )
 
 
@@ -169,3 +188,89 @@ async def get_current_admin(current: CurrentUserDep) -> User:
 
 
 AdminDep = Annotated[User, Depends(get_current_admin)]
+
+
+def get_send_message(request: Request, session: SessionDep) -> SendMessage:
+    return SendMessage(
+        conversations=SqlAlchemyConversationRepository(session),
+        messages=SqlAlchemyMessageRepository(session),
+        policy=ConversationAccessPolicy(),
+        events=_bus(request),
+        uow=SqlAlchemyUnitOfWork(session),
+        clock=SystemClock(),
+    )
+
+
+SendMessageDep = Annotated[SendMessage, Depends(get_send_message)]
+
+
+def get_edit_message(request: Request, session: SessionDep) -> EditMessage:
+    return EditMessage(
+        conversations=SqlAlchemyConversationRepository(session),
+        messages=SqlAlchemyMessageRepository(session),
+        events=_bus(request),
+        uow=SqlAlchemyUnitOfWork(session),
+        clock=SystemClock(),
+    )
+
+
+EditMessageDep = Annotated[EditMessage, Depends(get_edit_message)]
+
+
+def get_delete_message(request: Request, session: SessionDep) -> DeleteMessage:
+    return DeleteMessage(
+        conversations=SqlAlchemyConversationRepository(session),
+        messages=SqlAlchemyMessageRepository(session),
+        events=_bus(request),
+        uow=SqlAlchemyUnitOfWork(session),
+        clock=SystemClock(),
+    )
+
+
+DeleteMessageDep = Annotated[DeleteMessage, Depends(get_delete_message)]
+
+
+def get_mark_read(session: SessionDep) -> MarkRead:
+    return MarkRead(
+        conversations=SqlAlchemyConversationRepository(session),
+        reads=SqlAlchemyMessageReadRepository(session),
+        policy=ConversationAccessPolicy(),
+        uow=SqlAlchemyUnitOfWork(session),
+    )
+
+
+MarkReadDep = Annotated[MarkRead, Depends(get_mark_read)]
+
+
+def get_list_messages(session: SessionDep) -> ListMessages:
+    return ListMessages(
+        conversations=SqlAlchemyConversationRepository(session),
+        messages=SqlAlchemyMessageRepository(session),
+        policy=ConversationAccessPolicy(),
+    )
+
+
+ListMessagesDep = Annotated[ListMessages, Depends(get_list_messages)]
+
+
+def get_open_dm(session: SessionDep) -> OpenDirectMessage:
+    return OpenDirectMessage(
+        conversations=SqlAlchemyConversationRepository(session),
+        users=SqlAlchemyUserRepository(session),
+        uow=SqlAlchemyUnitOfWork(session),
+        clock=SystemClock(),
+    )
+
+
+OpenDmDep = Annotated[OpenDirectMessage, Depends(get_open_dm)]
+
+
+def get_list_conversations(session: SessionDep) -> ListConversations:
+    return ListConversations(
+        conversations=SqlAlchemyConversationRepository(session),
+        messages=SqlAlchemyMessageRepository(session),
+        reads=SqlAlchemyMessageReadRepository(session),
+    )
+
+
+ListConversationsDep = Annotated[ListConversations, Depends(get_list_conversations)]

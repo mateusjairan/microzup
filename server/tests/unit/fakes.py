@@ -4,6 +4,8 @@ from types import TracebackType
 from typing import Any
 from uuid import UUID
 
+from app.domain.entities.conversation import Conversation, ConversationMember
+from app.domain.entities.message import Message
 from app.domain.entities.sector import Sector
 from app.domain.entities.session import UserSession
 from app.domain.entities.user import User
@@ -143,3 +145,133 @@ class FakeUnitOfWork:
             self.commits += 1
         else:
             self.rollbacks += 1
+
+
+@dataclass
+class FakeConversationRepository:
+    conversations: list[Conversation] = field(default_factory=list)
+    members: list[ConversationMember] = field(default_factory=list)
+
+    async def add(self, conversation: Conversation) -> None:
+        self.conversations.append(conversation)
+
+    async def get_by_id(self, conversation_id: UUID) -> Conversation | None:
+        return next((c for c in self.conversations if c.id == conversation_id), None)
+
+    async def get_channel_by_sector(self, sector_id: UUID) -> Conversation | None:
+        return next((c for c in self.conversations if c.sector_id == sector_id), None)
+
+    async def get_dm(self, user_a: UUID, user_b: UUID) -> Conversation | None:
+        return next(
+            (c for c in self.conversations if c.kind == "dm" and c.dm_key == _key(user_a, user_b)),
+            None,
+        )
+
+    async def list_for_user(self, user_id: UUID) -> list[Conversation]:
+        return [
+            c
+            for c in self.conversations
+            if any(
+                m.conversation_id == c.id and m.user_id == user_id and m.left_at is None
+                for m in self.members
+            )
+        ]
+
+    async def add_member(self, member: ConversationMember) -> None:
+        self.members.append(member)
+
+    async def update_member(self, member: ConversationMember) -> None:
+        self.members = [
+            member
+            if m.user_id == member.user_id and m.conversation_id == member.conversation_id
+            else m
+            for m in self.members
+        ]
+
+    async def get_member(self, conversation_id: UUID, user_id: UUID) -> ConversationMember | None:
+        return next(
+            (
+                m
+                for m in self.members
+                if m.conversation_id == conversation_id and m.user_id == user_id
+            ),
+            None,
+        )
+
+    async def list_members(self, conversation_id: UUID) -> list[ConversationMember]:
+        return [m for m in self.members if m.conversation_id == conversation_id]
+
+
+def _key(user_a: UUID, user_b: UUID) -> str:
+    ordered = sorted((str(user_a), str(user_b)))
+    return f"{ordered[0]}:{ordered[1]}"
+
+
+@dataclass
+class FakeMessageRepository:
+    messages: list[Message] = field(default_factory=list)
+    counter: int = 0
+
+    async def add(self, message: Message) -> Message:
+        self.counter += 1
+        persisted = message.with_seq(self.counter)
+        self.messages.append(persisted)
+        return persisted
+
+    async def update(self, message: Message) -> None:
+        self.messages = [message if m.id == message.id else m for m in self.messages]
+
+    async def get_by_id(self, message_id: UUID) -> Message | None:
+        return next((m for m in self.messages if m.id == message_id), None)
+
+    async def get_by_client_id(self, conversation_id: UUID, client_id: str) -> Message | None:
+        return next(
+            (
+                m
+                for m in self.messages
+                if m.conversation_id == conversation_id and m.client_id == client_id
+            ),
+            None,
+        )
+
+    async def page(
+        self, conversation_id: UUID, before_seq: int | None, after_seq: int | None, limit: int
+    ) -> list[Message]:
+        result = [m for m in self.messages if m.conversation_id == conversation_id]
+        if before_seq is not None:
+            result = [m for m in result if m.seq < before_seq]
+        if after_seq is not None:
+            result = [m for m in result if m.seq > after_seq]
+        return sorted(result, key=lambda m: m.seq)[:limit]
+
+    async def last(self, conversation_id: UUID) -> Message | None:
+        result = [m for m in self.messages if m.conversation_id == conversation_id]
+        return max(result, key=lambda m: m.seq) if result else None
+
+    async def unread_count(self, conversation_id: UUID, last_read_seq: int) -> int:
+        return len(
+            [
+                m
+                for m in self.messages
+                if m.conversation_id == conversation_id and m.seq > last_read_seq
+            ]
+        )
+
+
+@dataclass
+class FakeMessageReadRepository:
+    reads: dict[tuple[UUID, UUID], int] = field(default_factory=dict)
+
+    async def upsert(self, conversation_id: UUID, user_id: UUID, last_read_seq: int) -> None:
+        self.reads[(conversation_id, user_id)] = last_read_seq
+
+    async def get(self, conversation_id: UUID, user_id: UUID) -> int:
+        return self.reads.get((conversation_id, user_id), 0)
+
+
+@dataclass
+class FakeEventBus:
+    events: list[object] = field(default_factory=list)
+
+    async def publish(self, event: object) -> None:
+        self.events.append(event)
