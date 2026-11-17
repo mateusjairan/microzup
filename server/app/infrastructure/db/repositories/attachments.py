@@ -43,6 +43,14 @@ class SqlAlchemyAttachmentRepository:
         ).all()
         return [attachment_to_domain(row) for row in rows]
 
+    async def list_by_message(self, message_id: UUID) -> list[Attachment]:
+        rows = (
+            await self._session.scalars(
+                select(AttachmentRow).where(AttachmentRow.message_id == message_id)
+            )
+        ).all()
+        return [attachment_to_domain(row) for row in rows]
+
     async def delete(self, attachment: Attachment) -> None:
         await self._session.execute(delete(AttachmentRow).where(AttachmentRow.id == attachment.id))
         await self._session.flush()

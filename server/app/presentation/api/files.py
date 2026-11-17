@@ -6,8 +6,18 @@ from fastapi.responses import FileResponse
 
 from app.application.use_cases.download_file import DownloadFileCommand
 from app.application.use_cases.upload_file import UploadFileCommand
+from app.domain.exceptions import NotFoundError
+from app.domain.policies.conversation_access import ConversationAccessPolicy
+from app.infrastructure.db.repositories.attachments import SqlAlchemyAttachmentRepository
+from app.infrastructure.db.repositories.conversations import SqlAlchemyConversationRepository
+from app.infrastructure.db.repositories.messages import SqlAlchemyMessageRepository
 from app.presentation.api.schemas import AttachmentOut
-from app.presentation.deps import CurrentUserDep, DownloadFileDep, UploadFileDep
+from app.presentation.deps import (
+    CurrentUserDep,
+    DownloadFileDep,
+    SessionDep,
+    UploadFileDep,
+)
 
 router = APIRouter(tags=["files"])
 
@@ -51,3 +61,20 @@ async def download_file(
         media_type="application/octet-stream",
         content_disposition_type="attachment",
     )
+
+
+@router.get("/messages/{message_id}/attachments", response_model=list[AttachmentOut])
+async def list_message_attachments(
+    message_id: UUID, current: CurrentUserDep, session: SessionDep
+) -> list[AttachmentOut]:
+    messages = SqlAlchemyMessageRepository(session)
+    message = await messages.get_by_id(message_id)
+    if message is None:
+        raise NotFoundError("Mensagem não encontrada.")
+
+    conversations = SqlAlchemyConversationRepository(session)
+    member = await conversations.get_member(message.conversation_id, current.id)
+    ConversationAccessPolicy().ensure_can_read(member)
+
+    attachments = await SqlAlchemyAttachmentRepository(session).list_by_message(message_id)
+    return [AttachmentOut.from_attachment(a) for a in attachments]

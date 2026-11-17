@@ -7,7 +7,7 @@ Leia este arquivo antes de qualquer alteração. Ele prevalece sobre hábitos ge
 
 Microzup é um **chat corporativo farmacêutico** para uso na rede local (LAN) da empresa: mensagens e arquivos entre membros de equipe e setores. O produto prioriza rastreabilidade, autoria preservada e ruído baixo — não é um mensageiro de consumo.
 
-**Estado atual:** M3 concluído — anexos (upload em streaming, dedupe por SHA-256, download autorizado, extensões bloqueadas, limpeza de órfãos). Próximo marco: M4 (cliente desktop).
+**Estado atual:** M4 concluído — cliente desktop Electron + React/TS (login, 3 painéis, presença, envio otimista, anexos, busca Ctrl+K, WS com reconexão). Próximo marco: M5 (endurecimento: busca, auditoria, backup, empacotamento).
 
 **Fontes de verdade (leia antes de decidir arquitetura):**
 
