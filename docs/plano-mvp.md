@@ -582,7 +582,7 @@ Regra: variável nova entra em `.env.example`, nesta tabela e em `config.py` na 
 
 | Marco | Entrega | Estimativa |
 |---|---|---|
-| **M0 — Fundação** | Repo, `pyproject`, ruff/mypy, `docker-compose` Postgres, Alembic baseline, esqueleto em camadas, `dev.ps1`, healthcheck | 2–3 d |
+| **M0 — Fundação** ✅ | Repo, `pyproject`, ruff/mypy, `docker-compose` Postgres 17, Alembic baseline, esqueleto em camadas, `dev.ps1`, healthcheck, testes unit/integration/api | 2–3 d |
 | **M1 — Identidade** | `User`/`Sector`, login, refresh, admin bootstrap, `UnitOfWork`, testes unitários e de integração | 3–4 d |
 | **M2 — Conversas** | Canais, DMs, `SendMessage`, paginação por `seq`, `EventBus` + WS hub, presença, não lidas | 5–6 d |
 | **M3 — Arquivos** | Upload streaming, dedupe, download autorizado, thumbnails, limites | 3–4 d |

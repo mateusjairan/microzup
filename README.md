@@ -6,9 +6,9 @@ Não é um mensageiro de consumo: o objetivo é comunicação interna densa, sil
 
 ## Status
 
-**Planejamento concluído — implementação inicia no M0.**
+**M0 concluído — fundação do servidor.** Postgres via Docker, Alembic, esqueleto em camadas, healthcheck e testes automatizados. Próximo marco: **M1 (identidade e autenticação)**.
 
-O repositório ainda não contém código executável. Os planos abaixo são a fonte de verdade até a primeira entrega.
+O front-end ainda não foi iniciado.
 
 ## Stack
 
@@ -34,9 +34,11 @@ docs/       planos técnicos
 scripts/    dev.ps1, backup.ps1, install-server.ps1
 ```
 
-## Desenvolvimento (a partir do M0)
+## Desenvolvimento
 
 Requisitos: Python 3.13, `uv`, Node 22, Docker Desktop e Git.
+
+O container do Postgres é exposto em `localhost:55432` (a 5432 costuma estar ocupada por um Postgres local).
 
 ```powershell
 docker compose -f server/docker-compose.yml up -d

@@ -1,0 +1,13 @@
+from typing import Protocol
+
+from app.domain.entities.sector import Sector
+
+
+class SectorRepository(Protocol):
+    async def add(self, sector: Sector) -> None: ...
+
+    async def get_by_slug(self, slug: str) -> Sector | None: ...
+
+    async def get_by_name(self, name: str) -> Sector | None: ...
+
+    async def list_all(self) -> list[Sector]: ...

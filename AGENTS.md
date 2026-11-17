@@ -7,7 +7,7 @@ Leia este arquivo antes de qualquer alteração. Ele prevalece sobre hábitos ge
 
 Microzup é um **chat corporativo farmacêutico** para uso na rede local (LAN) da empresa: mensagens e arquivos entre membros de equipe e setores. O produto prioriza rastreabilidade, autoria preservada e ruído baixo — não é um mensageiro de consumo.
 
-**Estado atual:** fase de planejamento. O repositório contém apenas `docs/`. Não existe código, build nem dependências instaladas ainda.
+**Estado atual:** M0 concluído — fundação do servidor (Postgres via Docker, Alembic, esqueleto em camadas, healthcheck e testes). Próximo marco: M1 (identidade e autenticação).
 
 **Fontes de verdade (leia antes de decidir arquitetura):**
 
@@ -76,7 +76,7 @@ npm run build
 npm run dist
 ```
 
-Portas: API `8000`, Vite `5173`, Postgres `5432`.
+Portas: API `8000`, Vite `5173`, Postgres `55432` no host (container; 5432 costuma estar ocupada por um Postgres local).
 Ambiente: Windows + PowerShell; não use sintaxe bash em scripts do repositório.
 
 ## 5. Regras de arquitetura (backend)
@@ -168,6 +168,7 @@ Ambiente: Windows + PowerShell; não use sintaxe bash em scripts do repositório
 ## 13. Armadilhas conhecidas
 
 - Windows: use `pathlib`, nunca concatene caminho com `/`; arquivos em UTF-8 sem BOM.
+- Windows + psycopg async exige `SelectorEventLoop`; `configure_event_loop()` é chamado em `main.py`, `alembic/env.py` e `tests/conftest.py`. Não remova.
 - `docker compose` precisa estar de pé **antes** de `alembic upgrade`; espere o healthcheck do Postgres.
 - Teste de integração que "passa" sem banco está errado — falhe explicitamente se a conexão não existir.
 - `messages.seq` vem do banco; não o simule no cliente.

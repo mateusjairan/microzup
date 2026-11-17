@@ -1,0 +1,25 @@
+name: microzup
+
+services:
+  db:
+    image: postgres:17
+    container_name: microzup-db
+    environment:
+      POSTGRES_USER: microzup_owner
+      POSTGRES_PASSWORD: microzup_dev_owner
+      POSTGRES_DB: microzup
+    ports:
+      # 5432 costuma estar ocupada por um PostgreSQL local; 55432 evita conflito.
+      - "55432:5432"
+    volumes:
+      - microzup_pgdata:/var/lib/postgresql/data
+      - ./infra/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U microzup_owner -d microzup"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+volumes:
+  microzup_pgdata:
