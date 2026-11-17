@@ -7,15 +7,23 @@ from app.application.use_cases.messages import (
     EditMessageCommand,
     SendMessageCommand,
 )
+from app.application.use_cases.search_messages import SearchMessagesCommand
 from app.presentation.api.schemas import EditMessageIn, MessageOut, SendMessageIn
 from app.presentation.deps import (
     CurrentUserDep,
     DeleteMessageDep,
     EditMessageDep,
+    SearchMessagesDep,
     SendMessageDep,
 )
 
 router = APIRouter(tags=["messages"])
+
+
+@router.get("/search", response_model=list[MessageOut])
+async def search(q: str, current: CurrentUserDep, use_case: SearchMessagesDep) -> list[MessageOut]:
+    messages = await use_case.execute(SearchMessagesCommand(user_id=current.id, query=q))
+    return [MessageOut.from_message(message) for message in messages]
 
 
 @router.post("/messages", response_model=MessageOut, status_code=status.HTTP_201_CREATED)

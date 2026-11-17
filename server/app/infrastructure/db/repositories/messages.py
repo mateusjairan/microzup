@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.message import Message
 from app.infrastructure.db.mappers import message_to_domain, message_to_row
-from app.infrastructure.db.models import MessageRow
+from app.infrastructure.db.models import ConversationMemberRow, MessageRow
 
 
 class SqlAlchemyMessageRepository:
@@ -83,3 +83,23 @@ class SqlAlchemyMessageRepository:
             )
         )
         return int(count or 0)
+
+    async def search(self, user_id: UUID, query: str, limit: int) -> list[Message]:
+        statement = (
+            select(MessageRow)
+            .join(
+                ConversationMemberRow,
+                ConversationMemberRow.conversation_id == MessageRow.conversation_id,
+            )
+            .where(
+                ConversationMemberRow.user_id == user_id,
+                ConversationMemberRow.left_at.is_(None),
+                MessageRow.search_vector.bool_op("@@")(
+                    func.websearch_to_tsquery("portuguese", query)
+                ),
+            )
+            .order_by(MessageRow.seq.desc())
+            .limit(limit)
+        )
+        rows = (await self._session.scalars(statement)).all()
+        return [message_to_domain(row) for row in rows]

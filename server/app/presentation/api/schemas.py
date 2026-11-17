@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -150,3 +151,22 @@ class MarkReadIn(BaseModel):
 
 class OpenDmIn(BaseModel):
     user_id: UUID
+
+
+class AuditOut(BaseModel):
+    id: int
+    actor_id: UUID | None
+    action: str
+    entity_type: str
+    entity_id: str | None
+    metadata: dict[str, Any]
+    ip: str | None
+    created_at: str
+
+
+class StatsOut(BaseModel):
+    users: int
+    sectors: int
+    conversations: int
+    messages: int
+    attachments: int

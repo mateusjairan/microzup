@@ -6,9 +6,7 @@ Não é um mensageiro de consumo: o objetivo é comunicação interna densa, sil
 
 ## Status
 
-**M0 concluído — fundação do servidor.** Postgres via Docker, Alembic, esqueleto em camadas, healthcheck e testes automatizados. Próximo marco: **M1 (identidade e autenticação)**.
-
-O front-end ainda não foi iniciado.
+**MVP implementado (M0–M5).** Backend completo (identidade, conversas, arquivos, busca, auditoria) e cliente desktop Electron. Pendente: empacotamento/instalador final, assinatura e piloto com um setor real.
 
 ## Stack
 
@@ -52,6 +50,22 @@ O primeiro administrador é criado por CLI, com senha lida de forma interativa:
 
 ```powershell
 uv run python -m app.cli create-admin --username admin
+```
+
+### Cliente desktop
+
+```powershell
+cd desktop
+npm ci
+npm run dev        # Vite + Electron (dev)
+npm run dist       # gera o instalador NSIS em desktop/release
+```
+
+### Backup
+
+```powershell
+$env:BACKUP_DSN = "postgresql://microzup_owner:senha@localhost:55432/microzup"
+.\scripts\backup.ps1 -BackupDir "C:\backups\microzup"
 ```
 
 Contrato de configuração: [`server/.env.example`](server/.env.example).

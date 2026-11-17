@@ -587,7 +587,7 @@ Regra: variável nova entra em `.env.example`, nesta tabela e em `config.py` na 
 | **M2 — Conversas** ✅ | Canais por setor, DMs, `SendMessage` idempotente, paginação por `seq`, `EventBus` + WS (ticket, presença, typing), não lidas, testes unit/integration/api | 5–6 d |
 | **M3 — Arquivos** ✅ | Upload streaming, dedupe por SHA-256, download autorizado, extensões bloqueadas, limpeza de órfãos, testes | 3–4 d |
 | **M4 — Cliente desktop** ✅ | Electron + React/TS, login, 3 painéis, presença, envio otimista, anexos, busca, WS com reconexão (ver `plano-frontend.md`); build e typecheck verdes | 6–7 d |
-| **M5 — Endurecimento** | Auditoria visível, busca, backup/restore, serviço Windows, piloto com 1 setor | 3–4 d |
+| **M5 — Endurecimento** ✅ | Busca full-text (`/search`), auditoria e estatísticas no admin, `backup.ps1`, `install-server.ps1` + spec PyInstaller, scripts de operação | 3–4 d |
 
 **Total: ~24–30 dias** até um piloto real, contando o front-end detalhado em `plano-frontend.md` (F0–F3 rodam em paralelo a M2/M3).
 

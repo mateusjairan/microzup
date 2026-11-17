@@ -20,6 +20,7 @@ from app.application.use_cases.messages import (
     SendMessage,
 )
 from app.application.use_cases.refresh import Refresh
+from app.application.use_cases.search_messages import SearchMessages
 from app.application.use_cases.update_user import UpdateUser
 from app.application.use_cases.upload_file import UploadFile
 from app.config import Settings
@@ -304,3 +305,10 @@ def get_download_file(request: Request, session: SessionDep) -> DownloadFile:
 
 
 DownloadFileDep = Annotated[DownloadFile, Depends(get_download_file)]
+
+
+def get_search_messages(session: SessionDep) -> SearchMessages:
+    return SearchMessages(messages=SqlAlchemyMessageRepository(session))
+
+
+SearchMessagesDep = Annotated[SearchMessages, Depends(get_search_messages)]

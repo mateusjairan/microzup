@@ -1,17 +1,29 @@
 import ipaddress
+from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Query, Request, status
+from sqlalchemy import func, select
 
 from app.application.use_cases.create_sector import CreateSectorCommand
 from app.application.use_cases.create_user import CreateUserCommand
 from app.application.use_cases.update_user import UpdateUserCommand
+from app.infrastructure.db.models import (
+    AttachmentRow,
+    AuditLogRow,
+    ConversationRow,
+    MessageRow,
+    SectorRow,
+    UserRow,
+)
 from app.infrastructure.db.repositories.sectors import SqlAlchemySectorRepository
 from app.infrastructure.db.repositories.users import SqlAlchemyUserRepository
 from app.presentation.api.schemas import (
+    AuditOut,
     CreateSectorIn,
     CreateUserIn,
     SectorOut,
+    StatsOut,
     UpdateUserIn,
     UserOut,
 )
@@ -100,4 +112,41 @@ async def create_sector(body: CreateSectorIn, use_case: CreateSectorDep) -> Sect
     )
     return SectorOut(
         id=sector.id, name=sector.name, slug=sector.slug, description=sector.description
+    )
+
+
+@router.get("/audit", response_model=list[AuditOut])
+async def list_audit(
+    _: AdminDep, session: SessionDep, limit: int = Query(default=100, ge=1, le=500)
+) -> list[AuditOut]:
+    rows = (
+        await session.scalars(select(AuditLogRow).order_by(AuditLogRow.id.desc()).limit(limit))
+    ).all()
+    return [
+        AuditOut(
+            id=row.id,
+            actor_id=row.actor_id,
+            action=row.action,
+            entity_type=row.entity_type,
+            entity_id=row.entity_id,
+            metadata=row.meta,
+            ip=None if row.ip is None else str(row.ip),
+            created_at=row.created_at.isoformat(),
+        )
+        for row in rows
+    ]
+
+
+@router.get("/stats", response_model=StatsOut)
+async def stats(_: AdminDep, session: SessionDep) -> StatsOut:
+    async def count(model: Any) -> int:
+        value = await session.scalar(select(func.count()).select_from(model))
+        return int(value or 0)
+
+    return StatsOut(
+        users=await count(UserRow),
+        sectors=await count(SectorRow),
+        conversations=await count(ConversationRow),
+        messages=await count(MessageRow),
+        attachments=await count(AttachmentRow),
     )
