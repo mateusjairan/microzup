@@ -9,6 +9,9 @@ from app.core.compat import configure_event_loop
 from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging
 from app.infrastructure.db.session import create_engine, create_session_factory
+from app.presentation.api.admin import router as admin_router
+from app.presentation.api.auth import me_router
+from app.presentation.api.auth import router as auth_router
 from app.presentation.api.health import router as health_router
 
 
@@ -41,6 +44,9 @@ def create_app() -> FastAPI:
     )
     install_error_handlers(app)
     app.include_router(health_router)
+    app.include_router(auth_router)
+    app.include_router(me_router)
+    app.include_router(admin_router)
     return app
 
 

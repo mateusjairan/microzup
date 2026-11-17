@@ -1,6 +1,9 @@
 from typing import Protocol
+from uuid import UUID
 
 from app.domain.entities.sector import Sector
+from app.domain.entities.session import UserSession
+from app.domain.entities.user import User
 
 
 class SectorRepository(Protocol):
@@ -11,3 +14,23 @@ class SectorRepository(Protocol):
     async def get_by_name(self, name: str) -> Sector | None: ...
 
     async def list_all(self) -> list[Sector]: ...
+
+
+class UserRepository(Protocol):
+    async def add(self, user: User) -> None: ...
+
+    async def update(self, user: User) -> None: ...
+
+    async def get_by_id(self, user_id: UUID) -> User | None: ...
+
+    async def get_by_username(self, username: str) -> User | None: ...
+
+    async def list_active(self) -> list[User]: ...
+
+
+class SessionRepository(Protocol):
+    async def add(self, session: UserSession) -> None: ...
+
+    async def update(self, session: UserSession) -> None: ...
+
+    async def get_by_refresh_hash(self, refresh_hash: str) -> UserSession | None: ...

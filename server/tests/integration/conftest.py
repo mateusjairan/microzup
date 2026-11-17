@@ -40,7 +40,9 @@ async def session() -> AsyncIterator[AsyncSession]:
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as db_session:
-            await db_session.execute(text("TRUNCATE TABLE sectors"))
+            await db_session.execute(
+                text("TRUNCATE TABLE sectors, users, sessions, audit_log RESTART IDENTITY CASCADE")
+            )
             await db_session.commit()
             yield db_session
     finally:

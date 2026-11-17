@@ -4,15 +4,21 @@ from fastapi.responses import JSONResponse
 
 from app.domain.exceptions import (
     AccessDeniedError,
+    AuthenticationError,
     ConflictError,
     DomainError,
+    InactiveUserError,
+    InvalidTokenError,
     NotFoundError,
     ValidationError,
 )
 
 _STATUS_BY_ERROR: tuple[tuple[type[DomainError], int], ...] = (
     (ValidationError, 422),
+    (AuthenticationError, 401),
+    (InvalidTokenError, 401),
     (AccessDeniedError, 403),
+    (InactiveUserError, 403),
     (NotFoundError, 404),
     (ConflictError, 409),
 )

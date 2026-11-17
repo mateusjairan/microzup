@@ -22,3 +22,19 @@ class AccessDeniedError(DomainError):
 
 class SectorAlreadyExists(ConflictError):
     code = "sector_already_exists"
+
+
+class AuthenticationError(DomainError):
+    code = "authentication_error"
+
+
+class InvalidTokenError(DomainError):
+    code = "invalid_token"
+
+
+class InactiveUserError(DomainError):
+    code = "inactive_user"
+
+
+class UserAlreadyExists(ConflictError):
+    code = "user_already_exists"
