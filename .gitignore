@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Node / Electron
+node_modules/
+desktop/dist/
+desktop/release/
+desktop/out/
+.vite/
+*.tsbuildinfo
+
+# Ambiente e segredos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Dados locais
+data/
+*.db
+*.sqlite3
+
+# Build / empacotamento
+build/
+dist/
+*.spec
+release/
+
+# Logs e temporários
+*.log
+tmp/
+temp/
+
+# Sistema
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
