@@ -8,6 +8,7 @@ from app.domain.policies.conversation_access import ConversationAccessPolicy
 from app.domain.ports.clock import Clock
 from app.domain.ports.events import EventBus
 from app.domain.ports.repositories import (
+    AttachmentRepository,
     ConversationRepository,
     MessageReadRepository,
     MessageRepository,
@@ -28,6 +29,7 @@ class SendMessageCommand:
     sender_id: UUID
     client_id: str
     body: str
+    attachment_ids: frozenset[UUID] = frozenset()
 
 
 class SendMessage:
@@ -35,6 +37,7 @@ class SendMessage:
         self,
         conversations: ConversationRepository,
         messages: MessageRepository,
+        attachments: AttachmentRepository,
         policy: ConversationAccessPolicy,
         events: EventBus,
         uow: UnitOfWork,
@@ -42,6 +45,7 @@ class SendMessage:
     ) -> None:
         self._conversations = conversations
         self._messages = messages
+        self._attachments = attachments
         self._policy = policy
         self._events = events
         self._uow = uow
@@ -63,11 +67,20 @@ class SendMessage:
             now=self._clock.now(),
         )
 
+        linked_ids: set[UUID] = set()
         async with self._uow:
             persisted = await self._messages.add(message)
+            for attachment_id in command.attachment_ids:
+                attachment = await self._attachments.get_by_id(attachment_id)
+                if attachment is None or attachment.message_id is not None:
+                    continue
+                if attachment.uploader_id != command.sender_id:
+                    raise ValidationError("Anexo não pertence ao remetente.")
+                await self._attachments.update(attachment.link(persisted.id))
+                linked_ids.add(attachment_id)
 
         recipients = await _recipient_ids(self._conversations, command.conversation_id)
-        await self._events.publish(MessageCreated(persisted, recipients))
+        await self._events.publish(MessageCreated(persisted, recipients, frozenset(linked_ids)))
         return persisted
 
 

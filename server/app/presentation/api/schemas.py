@@ -2,6 +2,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.domain.entities.attachment import Attachment
 from app.domain.entities.message import Message
 from app.domain.entities.user import User
 
@@ -116,6 +117,27 @@ class SendMessageIn(BaseModel):
     conversation_id: UUID
     client_id: str
     body: str
+    attachment_ids: list[UUID] = []
+
+
+class AttachmentOut(BaseModel):
+    id: UUID
+    message_id: UUID | None
+    filename: str
+    mime_type: str
+    size_bytes: int
+    sha256: str
+
+    @classmethod
+    def from_attachment(cls, attachment: Attachment) -> "AttachmentOut":
+        return cls(
+            id=attachment.id,
+            message_id=attachment.message_id,
+            filename=attachment.filename,
+            mime_type=attachment.mime_type,
+            size_bytes=attachment.size_bytes,
+            sha256=attachment.sha256,
+        )
 
 
 class EditMessageIn(BaseModel):

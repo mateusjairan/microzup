@@ -1,11 +1,13 @@
 from typing import cast
 
+from app.domain.entities.attachment import Attachment
 from app.domain.entities.conversation import Conversation, ConversationKind, ConversationMember
 from app.domain.entities.message import Message
 from app.domain.entities.sector import Sector
 from app.domain.entities.session import UserSession
 from app.domain.entities.user import Role, User
 from app.infrastructure.db.models import (
+    AttachmentRow,
     ConversationMemberRow,
     ConversationRow,
     MessageRow,
@@ -167,4 +169,32 @@ def message_to_row(message: Message) -> MessageRow:
         edited_at=message.edited_at,
         deleted_at=message.deleted_at,
         deleted_by=message.deleted_by,
+    )
+
+
+def attachment_to_domain(row: AttachmentRow) -> Attachment:
+    return Attachment(
+        id=row.id,
+        message_id=row.message_id,
+        uploader_id=row.uploader_id,
+        filename=row.filename,
+        mime_type=row.mime_type,
+        size_bytes=row.size_bytes,
+        sha256=row.sha256,
+        storage_path=row.storage_path,
+        created_at=row.created_at,
+    )
+
+
+def attachment_to_row(attachment: Attachment) -> AttachmentRow:
+    return AttachmentRow(
+        id=attachment.id,
+        message_id=attachment.message_id,
+        uploader_id=attachment.uploader_id,
+        filename=attachment.filename,
+        mime_type=attachment.mime_type,
+        size_bytes=attachment.size_bytes,
+        sha256=attachment.sha256,
+        storage_path=attachment.storage_path,
+        created_at=attachment.created_at,
     )

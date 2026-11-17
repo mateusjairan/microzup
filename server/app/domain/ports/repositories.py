@@ -1,6 +1,8 @@
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.domain.entities.attachment import Attachment
 from app.domain.entities.conversation import Conversation, ConversationMember
 from app.domain.entities.message import Message
 from app.domain.entities.sector import Sector
@@ -86,3 +88,17 @@ class MessageReadRepository(Protocol):
     async def upsert(self, conversation_id: UUID, user_id: UUID, last_read_seq: int) -> None: ...
 
     async def get(self, conversation_id: UUID, user_id: UUID) -> int: ...
+
+
+class AttachmentRepository(Protocol):
+    async def add(self, attachment: Attachment) -> None: ...
+
+    async def update(self, attachment: Attachment) -> None: ...
+
+    async def get_by_id(self, attachment_id: UUID) -> Attachment | None: ...
+
+    async def get_by_sha256(self, sha256: str) -> Attachment | None: ...
+
+    async def list_orphans_older_than(self, before: datetime) -> list[Attachment]: ...
+
+    async def delete(self, attachment: Attachment) -> None: ...

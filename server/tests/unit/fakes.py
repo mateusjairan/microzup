@@ -4,6 +4,7 @@ from types import TracebackType
 from typing import Any
 from uuid import UUID
 
+from app.domain.entities.attachment import Attachment
 from app.domain.entities.conversation import Conversation, ConversationMember
 from app.domain.entities.message import Message
 from app.domain.entities.sector import Sector
@@ -275,3 +276,26 @@ class FakeEventBus:
 
     async def publish(self, event: object) -> None:
         self.events.append(event)
+
+
+@dataclass
+class FakeAttachmentRepository:
+    attachments: list[Attachment] = field(default_factory=list)
+
+    async def add(self, attachment: Attachment) -> None:
+        self.attachments.append(attachment)
+
+    async def update(self, attachment: Attachment) -> None:
+        self.attachments = [attachment if a.id == attachment.id else a for a in self.attachments]
+
+    async def get_by_id(self, attachment_id: UUID) -> Attachment | None:
+        return next((a for a in self.attachments if a.id == attachment_id), None)
+
+    async def get_by_sha256(self, sha256: str) -> Attachment | None:
+        return next((a for a in self.attachments if a.sha256 == sha256), None)
+
+    async def list_orphans_older_than(self, before) -> list[Attachment]:
+        return [a for a in self.attachments if a.message_id is None and a.created_at < before]
+
+    async def delete(self, attachment: Attachment) -> None:
+        self.attachments = [a for a in self.attachments if a.id != attachment.id]

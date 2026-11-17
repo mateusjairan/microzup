@@ -28,6 +28,7 @@ async def send_message(
             sender_id=current.id,
             client_id=body.client_id,
             body=body.body,
+            attachment_ids=frozenset(body.attachment_ids),
         )
     )
     return MessageOut.from_message(message)

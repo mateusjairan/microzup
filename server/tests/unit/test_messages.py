@@ -21,6 +21,7 @@ from app.domain.exceptions import AccessDeniedError, NotFoundError, ValidationEr
 from app.domain.policies.conversation_access import ConversationAccessPolicy
 
 from tests.unit.fakes import (
+    FakeAttachmentRepository,
     FakeConversationRepository,
     FakeEventBus,
     FakeHasher,
@@ -66,7 +67,9 @@ async def test_send_message_persists_and_publishes() -> None:
     b = make_user("bruno.lima")
     conversation, conversations, messages, events, uow, policy = build_message_stack(a, b)
 
-    use_case = SendMessage(conversations, messages, policy, events, uow, FixedClock(NOW))
+    use_case = SendMessage(
+        conversations, messages, FakeAttachmentRepository(), policy, events, uow, FixedClock(NOW)
+    )
     message = await use_case.execute(
         SendMessageCommand(
             conversation_id=conversation.id, sender_id=a.id, client_id="c1", body="Olá!"
@@ -83,7 +86,9 @@ async def test_send_message_is_idempotent() -> None:
     b = make_user("bruno.lima")
     conversation, conversations, messages, events, uow, policy = build_message_stack(a, b)
 
-    use_case = SendMessage(conversations, messages, policy, events, uow, FixedClock(NOW))
+    use_case = SendMessage(
+        conversations, messages, FakeAttachmentRepository(), policy, events, uow, FixedClock(NOW)
+    )
     first = await use_case.execute(
         SendMessageCommand(
             conversation_id=conversation.id, sender_id=a.id, client_id="c1", body="Olá!"
@@ -106,7 +111,9 @@ async def test_non_member_cannot_send() -> None:
     intruder = make_user("carla.dias")
     conversation, conversations, messages, events, uow, policy = build_message_stack(a, b)
 
-    use_case = SendMessage(conversations, messages, policy, events, uow, FixedClock(NOW))
+    use_case = SendMessage(
+        conversations, messages, FakeAttachmentRepository(), policy, events, uow, FixedClock(NOW)
+    )
     with pytest.raises(AccessDeniedError):
         await use_case.execute(
             SendMessageCommand(
@@ -119,7 +126,15 @@ async def test_edit_only_by_author() -> None:
     a = make_user("ana.souza")
     b = make_user("bruno.lima")
     conversation, conversations, messages, events, uow, policy = build_message_stack(a, b)
-    send = SendMessage(conversations, messages, policy, events, uow, FixedClock(NOW))
+    send = SendMessage(
+        conversations,
+        messages,
+        FakeAttachmentRepository(),
+        policy,
+        events,
+        uow,
+        FixedClock(NOW),
+    )
     message = await send.execute(
         SendMessageCommand(
             conversation_id=conversation.id, sender_id=a.id, client_id="c1", body="Olá!"
@@ -141,7 +156,15 @@ async def test_delete_soft_deletes_and_publishes() -> None:
     a = make_user("ana.souza")
     b = make_user("bruno.lima")
     conversation, conversations, messages, events, uow, policy = build_message_stack(a, b)
-    send = SendMessage(conversations, messages, policy, events, uow, FixedClock(NOW))
+    send = SendMessage(
+        conversations,
+        messages,
+        FakeAttachmentRepository(),
+        policy,
+        events,
+        uow,
+        FixedClock(NOW),
+    )
     message = await send.execute(
         SendMessageCommand(
             conversation_id=conversation.id, sender_id=a.id, client_id="c1", body="Olá!"
@@ -189,7 +212,15 @@ async def test_mark_read_and_unread_count() -> None:
     b = make_user("bruno.lima")
     conversation, conversations, messages, events, uow, policy = build_message_stack(a, b)
     reads = FakeMessageReadRepository()
-    send = SendMessage(conversations, messages, policy, events, uow, FixedClock(NOW))
+    send = SendMessage(
+        conversations,
+        messages,
+        FakeAttachmentRepository(),
+        policy,
+        events,
+        uow,
+        FixedClock(NOW),
+    )
     await send.execute(
         SendMessageCommand(
             conversation_id=conversation.id, sender_id=a.id, client_id="c1", body="Olá!"

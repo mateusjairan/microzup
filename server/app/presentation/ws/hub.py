@@ -54,13 +54,15 @@ class WebSocketHub:
 
     async def on_event(self, event: object) -> None:
         if isinstance(event, MessageCreated):
+            payload = message_payload(event.message)
+            payload["attachment_ids"] = [str(aid) for aid in event.attachment_ids]
             await self.send_to_users(
                 event.recipient_ids,
                 {
                     "type": "message.created",
                     "seq": event.message.seq,
                     "ts": _now(),
-                    "payload": message_payload(event.message),
+                    "payload": payload,
                 },
             )
         elif isinstance(event, MessageUpdated):

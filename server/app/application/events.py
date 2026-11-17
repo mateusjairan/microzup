@@ -8,6 +8,7 @@ from app.domain.entities.message import Message
 class MessageCreated:
     message: Message
     recipient_ids: frozenset[UUID]
+    attachment_ids: frozenset[UUID] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)

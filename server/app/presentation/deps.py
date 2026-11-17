@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.application.use_cases.conversations import ListConversations, OpenDirectMessage
 from app.application.use_cases.create_sector import CreateSector
 from app.application.use_cases.create_user import CreateUser
+from app.application.use_cases.download_file import DownloadFile
 from app.application.use_cases.login import Login
 from app.application.use_cases.logout import Logout
 from app.application.use_cases.messages import (
@@ -20,11 +21,13 @@ from app.application.use_cases.messages import (
 )
 from app.application.use_cases.refresh import Refresh
 from app.application.use_cases.update_user import UpdateUser
+from app.application.use_cases.upload_file import UploadFile
 from app.config import Settings
 from app.domain.entities.user import User
 from app.domain.policies.conversation_access import ConversationAccessPolicy
 from app.domain.ports.events import EventBus
 from app.infrastructure.clock import SystemClock
+from app.infrastructure.db.repositories.attachments import SqlAlchemyAttachmentRepository
 from app.infrastructure.db.repositories.audit import SqlAlchemyAuditSink
 from app.infrastructure.db.repositories.conversations import SqlAlchemyConversationRepository
 from app.infrastructure.db.repositories.message_reads import SqlAlchemyMessageReadRepository
@@ -38,6 +41,7 @@ from app.infrastructure.security import (
     JwtAccessTokenIssuer,
     Sha256RefreshTokenIssuer,
 )
+from app.infrastructure.storage import LocalDiskStorage
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -194,6 +198,7 @@ def get_send_message(request: Request, session: SessionDep) -> SendMessage:
     return SendMessage(
         conversations=SqlAlchemyConversationRepository(session),
         messages=SqlAlchemyMessageRepository(session),
+        attachments=SqlAlchemyAttachmentRepository(session),
         policy=ConversationAccessPolicy(),
         events=_bus(request),
         uow=SqlAlchemyUnitOfWork(session),
@@ -274,3 +279,28 @@ def get_list_conversations(session: SessionDep) -> ListConversations:
 
 
 ListConversationsDep = Annotated[ListConversations, Depends(get_list_conversations)]
+
+
+def get_upload_file(request: Request, session: SessionDep) -> UploadFile:
+    return UploadFile(
+        attachments=SqlAlchemyAttachmentRepository(session),
+        storage=LocalDiskStorage(_settings(request).storage_dir),
+        uow=SqlAlchemyUnitOfWork(session),
+        clock=SystemClock(),
+    )
+
+
+UploadFileDep = Annotated[UploadFile, Depends(get_upload_file)]
+
+
+def get_download_file(request: Request, session: SessionDep) -> DownloadFile:
+    return DownloadFile(
+        attachments=SqlAlchemyAttachmentRepository(session),
+        messages=SqlAlchemyMessageRepository(session),
+        conversations=SqlAlchemyConversationRepository(session),
+        policy=ConversationAccessPolicy(),
+        storage=LocalDiskStorage(_settings(request).storage_dir),
+    )
+
+
+DownloadFileDep = Annotated[DownloadFile, Depends(get_download_file)]

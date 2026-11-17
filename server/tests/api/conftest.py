@@ -2,6 +2,7 @@ import asyncio
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ APP_DB_URL = os.environ.get(
 # Antes de qualquer import de app.main, apontamos o runtime para o banco de teste.
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = APP_DB_URL
+os.environ["STORAGE_DIR"] = tempfile.mkdtemp(prefix="microzup-test-")
 
 
 @pytest.fixture(scope="session", autouse=True)
