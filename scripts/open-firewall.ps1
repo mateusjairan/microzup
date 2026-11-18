@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 $name = "Microzup API ($Port)"
 
 if (Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue) {
-    Write-Host "Regra de firewall já existe: $name"
+    Write-Host "Regra de firewall ja existe: $name"
     exit 0
 }
 
