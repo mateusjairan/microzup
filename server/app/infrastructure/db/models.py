@@ -183,6 +183,7 @@ class AttachmentRow(Base):
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
+    thumbnail_path: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -183,6 +183,7 @@ def attachment_to_domain(row: AttachmentRow) -> Attachment:
         sha256=row.sha256,
         storage_path=row.storage_path,
         created_at=row.created_at,
+        thumbnail_path=row.thumbnail_path,
     )
 
 
@@ -196,5 +197,6 @@ def attachment_to_row(attachment: Attachment) -> AttachmentRow:
         size_bytes=attachment.size_bytes,
         sha256=attachment.sha256,
         storage_path=attachment.storage_path,
+        thumbnail_path=attachment.thumbnail_path,
         created_at=attachment.created_at,
     )

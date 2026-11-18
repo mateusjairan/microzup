@@ -15,3 +15,10 @@ class InMemoryEventBus:
 
     async def publish(self, event: object) -> None:
         await asyncio.gather(*(subscriber(event) for subscriber in self._subscribers))
+
+
+class NullEventBus:
+    """Null Object (plano §4.2): evita `if bus is not None` em testes e CLI."""
+
+    async def publish(self, event: object) -> None:
+        return None

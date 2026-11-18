@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.domain.entities.attachment import Attachment
+from app.domain.entities.attachment import Attachment, AttachmentHit
 from app.domain.entities.message import Message
 from app.domain.entities.user import User
 
@@ -106,7 +106,17 @@ class ConversationOut(BaseModel):
     kind: str
     name: str | None
     sector_id: UUID | None
+    archived_at: str | None = None
     peer_id: UUID | None = None
+    peer_is_active: bool | None = None
+
+
+class ConversationMemberOut(BaseModel):
+    user_id: UUID
+    username: str
+    display_name: str
+    role: str
+    presence: str
 
 
 class MessageOut(BaseModel):
@@ -138,6 +148,7 @@ class MessageOut(BaseModel):
 class ConversationSummaryOut(BaseModel):
     conversation: ConversationOut
     unread_count: int
+    last_read_seq: int
     last_message: MessageOut | None
 
 
@@ -155,6 +166,7 @@ class AttachmentOut(BaseModel):
     mime_type: str
     size_bytes: int
     sha256: str
+    has_thumbnail: bool = False
 
     @classmethod
     def from_attachment(cls, attachment: Attachment) -> "AttachmentOut":
@@ -165,7 +177,47 @@ class AttachmentOut(BaseModel):
             mime_type=attachment.mime_type,
             size_bytes=attachment.size_bytes,
             sha256=attachment.sha256,
+            has_thumbnail=attachment.thumbnail_path is not None,
         )
+
+
+class FileHitOut(BaseModel):
+    """Anexo achado por nome de arquivo, com a conversa/mensagem de contexto."""
+
+    id: UUID
+    filename: str
+    mime_type: str
+    size_bytes: int
+    sha256: str
+    has_thumbnail: bool
+    message_id: UUID
+    conversation_id: UUID
+    message_seq: int
+    message_created_at: str
+
+    @classmethod
+    def from_hit(cls, hit: AttachmentHit) -> "FileHitOut":
+        # O repositório só devolve anexos vinculados (INNER JOIN messages).
+        assert hit.attachment.message_id is not None
+        return cls(
+            id=hit.attachment.id,
+            filename=hit.attachment.filename,
+            mime_type=hit.attachment.mime_type,
+            size_bytes=hit.attachment.size_bytes,
+            sha256=hit.attachment.sha256,
+            has_thumbnail=hit.attachment.thumbnail_path is not None,
+            message_id=hit.attachment.message_id,
+            conversation_id=hit.conversation_id,
+            message_seq=hit.message_seq,
+            message_created_at=hit.message_created_at.isoformat(),
+        )
+
+
+class SearchOut(BaseModel):
+    """Resposta unificada de /search (plano §5/§6): mensagens + anexos."""
+
+    messages: list[MessageOut]
+    files: list[FileHitOut]
 
 
 class EditMessageIn(BaseModel):
@@ -197,3 +249,36 @@ class StatsOut(BaseModel):
     conversations: int
     messages: int
     attachments: int
+    storage_bytes: int = 0
+    storage_files: int = 0
+    disk_free_bytes: int = 0
+    disk_total_bytes: int = 0
+
+
+class ChannelOut(BaseModel):
+    id: UUID
+    name: str | None
+    sector_id: UUID | None
+    sector_name: str | None = None
+    member_count: int = 0
+    archived_at: str | None = None
+
+    @classmethod
+    def from_summary(cls, summary: Any) -> "ChannelOut":
+        return cls(
+            id=summary.conversation.id,
+            name=summary.conversation.name,
+            sector_id=summary.conversation.sector_id,
+            sector_name=summary.sector.name if summary.sector else None,
+            member_count=summary.member_count,
+            archived_at=(
+                summary.conversation.archived_at.isoformat()
+                if summary.conversation.archived_at
+                else None
+            ),
+        )
+
+
+class UpdateChannelIn(BaseModel):
+    name: str | None = None
+    archived: bool | None = None

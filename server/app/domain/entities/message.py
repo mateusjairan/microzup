@@ -3,22 +3,14 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from app.domain.exceptions import ValidationError
+from app.domain.value_objects.message_body import BODY_MAX, MessageBody
 
-BODY_MAX = 8000
+# MessageBody vive em domain/value_objects (plano §4.1); re-export mantém os
+# importadores históricos de `entities.message` funcionando.
+__all__ = ["BODY_MAX", "CLIENT_ID_MAX", "DELETED_BODY", "Message", "MessageBody"]
+
 CLIENT_ID_MAX = 64
 DELETED_BODY = "Mensagem removida"
-
-
-@dataclass(frozen=True, slots=True)
-class MessageBody:
-    value: str
-
-    def __init__(self, value: str) -> None:
-        if not value.strip():
-            raise ValidationError("A mensagem não pode ser vazia.")
-        if len(value) > BODY_MAX:
-            raise ValidationError(f"A mensagem excede {BODY_MAX} caracteres.")
-        object.__setattr__(self, "value", value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,7 +58,12 @@ class Message:
     def edit(self, body: MessageBody, now: datetime) -> "Message":
         return replace(self, body=body.value, edited_at=now)
 
-    def delete(self, actor_id: UUID, now: datetime) -> "Message":
+    def delete(self, actor_id: UUID | None, now: datetime) -> "Message":
+        """Soft delete: corpo substituído, original preservado na auditoria.
+
+        `actor_id=None` significa ator sistema (ex.: retenção, plano §8) —
+        o registro de auditoria correspondente marca o ator como "system".
+        """
         return replace(
             self,
             body=DELETED_BODY,

@@ -1,6 +1,7 @@
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Query, Response, status
 
 from app.application.use_cases.messages import (
     DeleteMessageCommand,
@@ -8,7 +9,13 @@ from app.application.use_cases.messages import (
     SendMessageCommand,
 )
 from app.application.use_cases.search_messages import SearchMessagesCommand
-from app.presentation.api.schemas import EditMessageIn, MessageOut, SendMessageIn
+from app.presentation.api.schemas import (
+    EditMessageIn,
+    FileHitOut,
+    MessageOut,
+    SearchOut,
+    SendMessageIn,
+)
 from app.presentation.deps import (
     CurrentUserDep,
     DeleteMessageDep,
@@ -20,10 +27,30 @@ from app.presentation.deps import (
 router = APIRouter(tags=["messages"])
 
 
-@router.get("/search", response_model=list[MessageOut])
-async def search(q: str, current: CurrentUserDep, use_case: SearchMessagesDep) -> list[MessageOut]:
-    messages = await use_case.execute(SearchMessagesCommand(user_id=current.id, query=q))
-    return [MessageOut.from_message(message) for message in messages]
+@router.get("/search", response_model=SearchOut)
+async def search(
+    q: str,
+    current: CurrentUserDep,
+    use_case: SearchMessagesDep,
+    conversation_id: Annotated[UUID | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 30,
+) -> SearchOut:
+    """Busca full-text em mensagens (ts_rank_cd) + nome de arquivo (pg_trgm).
+
+    `conversation_id` revalida acesso no servidor: só conversas do usuário.
+    """
+    result = await use_case.execute(
+        SearchMessagesCommand(
+            user_id=current.id,
+            query=q,
+            conversation_id=conversation_id,
+            limit=limit,
+        )
+    )
+    return SearchOut(
+        messages=[MessageOut.from_message(message) for message in result.messages],
+        files=[FileHitOut.from_hit(hit) for hit in result.files],
+    )
 
 
 @router.post("/messages", response_model=MessageOut, status_code=status.HTTP_201_CREATED)

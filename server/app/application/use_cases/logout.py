@@ -1,16 +1,12 @@
-from dataclasses import dataclass
-
-from app.domain.ports.audit import AuditLogSink
+from app.application.dto import LogoutCommand
+from app.application.events import AuditRequested
 from app.domain.ports.clock import Clock
+from app.domain.ports.events import EventBus
 from app.domain.ports.repositories import SessionRepository
 from app.domain.ports.security import RefreshTokenIssuer
 from app.domain.ports.unit_of_work import UnitOfWork
 
-
-@dataclass(frozen=True, slots=True)
-class LogoutCommand:
-    refresh_token: str
-    ip: str | None = None
+__all__ = ["Logout", "LogoutCommand"]
 
 
 class Logout:
@@ -18,13 +14,13 @@ class Logout:
         self,
         sessions: SessionRepository,
         refresh_tokens: RefreshTokenIssuer,
-        audit: AuditLogSink,
+        events: EventBus,
         uow: UnitOfWork,
         clock: Clock,
     ) -> None:
         self._sessions = sessions
         self._refresh_tokens = refresh_tokens
-        self._audit = audit
+        self._events = events
         self._uow = uow
         self._clock = clock
 
@@ -37,11 +33,13 @@ class Logout:
 
         async with self._uow:
             await self._sessions.update(session.revoke(self._clock.now()))
-            await self._audit.record(
-                "auth.logout",
-                "session",
-                str(session.id),
-                session.user_id,
-                None,
-                command.ip,
+
+        await self._events.publish(
+            AuditRequested(
+                action="auth.logout",
+                entity_type="session",
+                entity_id=str(session.id),
+                actor_id=session.user_id,
+                ip=command.ip,
             )
+        )

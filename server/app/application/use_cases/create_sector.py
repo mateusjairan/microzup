@@ -1,20 +1,21 @@
-from dataclasses import dataclass
-
-from app.domain.entities.conversation import Conversation
+from app.application.dto import CreateSectorCommand
+from app.domain.entities.conversation import ConversationFactory
 from app.domain.entities.sector import Sector
 from app.domain.exceptions import SectorAlreadyExists
 from app.domain.ports.clock import Clock
 from app.domain.ports.repositories import ConversationRepository, SectorRepository
 from app.domain.ports.unit_of_work import UnitOfWork
 
-
-@dataclass(frozen=True, slots=True)
-class CreateSectorCommand:
-    name: str
-    description: str | None = None
+__all__ = ["CreateSector", "CreateSectorCommand"]
 
 
 class CreateSector:
+    """Cadastra setor + canal de setor (plano §5).
+
+    A auditoria `sector.create` é aplicada por composição com o decorator
+    `@audit` na borda de DI (deps.py) — não dentro da regra.
+    """
+
     def __init__(
         self,
         sectors: SectorRepository,
@@ -36,7 +37,7 @@ class CreateSector:
         async with self._uow:
             await self._sectors.add(sector)
             if self._conversations is not None:
-                channel = Conversation.create_channel(
+                channel = ConversationFactory.open_channel(
                     sector.id, sector.name, None, self._clock.now()
                 )
                 await self._conversations.add(channel)

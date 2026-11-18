@@ -1,36 +1,31 @@
-from dataclasses import dataclass
 from typing import cast
-from uuid import UUID
 
-from app.domain.entities.conversation import Conversation, ConversationMember
+from app.application.dto import CreateUserCommand
+from app.domain.entities.conversation import ConversationFactory, ConversationMember
 from app.domain.entities.sector import Sector
 from app.domain.entities.user import Password, Role, User, Username
 from app.domain.exceptions import NotFoundError, UserAlreadyExists
-from app.domain.ports.audit import AuditLogSink
 from app.domain.ports.clock import Clock
 from app.domain.ports.repositories import ConversationRepository, SectorRepository, UserRepository
 from app.domain.ports.security import PasswordHasher
 from app.domain.ports.unit_of_work import UnitOfWork
 
-
-@dataclass(frozen=True, slots=True)
-class CreateUserCommand:
-    username: str
-    display_name: str
-    password: str
-    role: str = "member"
-    sector_id: UUID | None = None
-    actor_id: UUID | None = None
-    ip: str | None = None
+__all__ = ["CreateUser", "CreateUserCommand"]
 
 
 class CreateUser:
+    """Cria usuário (e materializa a adesão ao canal do setor, plano §5).
+
+    A auditoria (`user.create`/`user.bootstrap`) não acontece aqui: é aplicada
+    por composição com o decorator `@audit` na borda (deps.py / CLI), que
+    publica `AuditRequested` no EventBus.
+    """
+
     def __init__(
         self,
         users: UserRepository,
         sectors: SectorRepository | None,
         hasher: PasswordHasher,
-        audit: AuditLogSink,
         uow: UnitOfWork,
         clock: Clock,
         conversations: ConversationRepository | None = None,
@@ -38,7 +33,6 @@ class CreateUser:
         self._users = users
         self._sectors = sectors
         self._hasher = hasher
-        self._audit = audit
         self._uow = uow
         self._clock = clock
         self._conversations = conversations
@@ -71,25 +65,18 @@ class CreateUser:
             now=self._clock.now(),
         )
 
+        now = self._clock.now()
         async with self._uow:
             await self._users.add(user)
             if self._conversations is not None and user.sector_id is not None:
                 channel = await self._conversations.get_channel_by_sector(user.sector_id)
                 if channel is None:
-                    channel = Conversation.create_channel(
-                        user.sector_id, user.display_name, command.actor_id, self._clock.now()
+                    channel = ConversationFactory.open_channel(
+                        user.sector_id, user.display_name, command.actor_id, now
                     )
                     await self._conversations.add(channel)
                 await self._conversations.add_member(
-                    ConversationMember.create(channel.id, user.id, self._clock.now())
+                    ConversationMember.create(channel.id, user.id, now)
                 )
-            await self._audit.record(
-                "user.create",
-                "user",
-                str(user.id),
-                command.actor_id,
-                {"username": user.username, "role": user.role},
-                command.ip,
-            )
 
         return user

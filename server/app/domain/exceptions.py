@@ -38,3 +38,11 @@ class InactiveUserError(DomainError):
 
 class UserAlreadyExists(ConflictError):
     code = "user_already_exists"
+
+
+class RateLimitedError(DomainError):
+    code = "rate_limited"
+
+
+class TooManyAttemptsError(DomainError):
+    code = "too_many_attempts"

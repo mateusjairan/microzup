@@ -1,0 +1,5 @@
+# Artefatos de teste: o tempdir pode resolver para o cwd dependendo do runner;
+# tudo aqui é gerado e removido pelas próprias execuções do pytest.
+microzup-test-*/
+.pytest-tmp/
+pytest-of-*/

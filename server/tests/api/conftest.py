@@ -1,5 +1,6 @@
 import asyncio
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -21,7 +22,12 @@ APP_DB_URL = os.environ.get(
 # Antes de qualquer import de app.main, apontamos o runtime para o banco de teste.
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = APP_DB_URL
-os.environ["STORAGE_DIR"] = tempfile.mkdtemp(prefix="microzup-test-")
+# dir explícito dentro do repo: alguns runners resolvem o tempdir para o cwd.
+_STORAGE_TMP = Path(tempfile.mkdtemp(prefix="microzup-test-", dir=str(SERVER_ROOT)))
+os.environ["STORAGE_DIR"] = str(_STORAGE_TMP)
+# Testes de API fazem logins repetidos do admin por helper (mesmo IP no TestClient);
+# o limite de login é exercitado em teste dedicado + unitário, então sobe o teto aqui.
+os.environ.setdefault("RATE_LIMIT_LOGIN_PER_MINUTE", "1000")
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -39,6 +45,12 @@ def _migrate() -> None:
         pytest.fail(f"Falha ao migrar o banco de teste:\n{result.stderr}")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _remove_storage_tmp():
+    yield
+    shutil.rmtree(_STORAGE_TMP, ignore_errors=True)
+
+
 def _reset_and_seed() -> None:
     from app.core.compat import configure_event_loop
 
@@ -47,9 +59,9 @@ def _reset_and_seed() -> None:
 
 
 async def _reset_and_seed_async() -> None:
-    from app.application.use_cases.create_user import CreateUser, CreateUserCommand
+    from app.application.dto import CreateUserCommand
+    from app.application.use_cases.create_user import CreateUser
     from app.infrastructure.clock import SystemClock
-    from app.infrastructure.db.repositories.audit import SqlAlchemyAuditSink
     from app.infrastructure.db.repositories.users import SqlAlchemyUserRepository
     from app.infrastructure.db.session import create_engine, create_session_factory
     from app.infrastructure.db.uow import SqlAlchemyUnitOfWork
@@ -63,11 +75,12 @@ async def _reset_and_seed_async() -> None:
             text("TRUNCATE sectors, users, sessions, audit_log RESTART IDENTITY CASCADE")
         )
         await session.commit()
+        # O admin de seed não audita: a auditoria agora é efeito colateral via
+        # EventBus (decorator @audit), aplicada apenas nas bordas reais de API/CLI.
         use_case = CreateUser(
             users=SqlAlchemyUserRepository(session),
             sectors=None,
             hasher=Argon2Hasher(),
-            audit=SqlAlchemyAuditSink(session),
             uow=SqlAlchemyUnitOfWork(session),
             clock=SystemClock(),
         )

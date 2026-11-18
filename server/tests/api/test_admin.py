@@ -42,14 +42,16 @@ def test_search_finds_own_conversation_message(client) -> None:
     )
 
     results = client.get("/search", headers=ana_h, params={"q": "desvio"}).json()
-    assert len(results) == 1
-    assert "desvio" in results[0]["body"]
+    assert len(results["messages"]) == 1
+    assert "desvio" in results["messages"][0]["body"]
+    assert results["messages"][0]["conversation_id"] == dm["id"]
+    assert results["files"] == []
 
     # Bruno também encontra (participa da conversa).
     results_bruno = client.get(
         "/search", headers={"Authorization": f"Bearer {bruno}"}, params={"q": "desvio"}
     ).json()
-    assert len(results_bruno) == 1
+    assert len(results_bruno["messages"]) == 1
 
 
 def test_audit_and_stats_endpoints(client) -> None:

@@ -1,10 +1,13 @@
 import ipaddress
-from typing import Any
+import shutil
+from pathlib import Path
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request, status
 from sqlalchemy import func, select
 
+from app.application.use_cases.conversations import UpdateChannelCommand
 from app.application.use_cases.create_sector import CreateSectorCommand
 from app.application.use_cases.create_user import CreateUserCommand
 from app.application.use_cases.reset_password import ResetPasswordCommand
@@ -18,15 +21,18 @@ from app.infrastructure.db.models import (
     SectorRow,
     UserRow,
 )
+from app.infrastructure.db.repositories.conversations import SqlAlchemyConversationRepository
 from app.infrastructure.db.repositories.sectors import SqlAlchemySectorRepository
 from app.infrastructure.db.repositories.users import SqlAlchemyUserRepository
 from app.presentation.api.schemas import (
     AuditOut,
+    ChannelOut,
     CreateSectorIn,
     CreateUserIn,
     ResetPasswordIn,
     SectorOut,
     StatsOut,
+    UpdateChannelIn,
     UpdateSectorIn,
     UpdateUserIn,
     UserOut,
@@ -35,8 +41,10 @@ from app.presentation.deps import (
     AdminDep,
     CreateSectorDep,
     CreateUserDep,
+    ListChannelsDep,
     ResetPasswordDep,
     SessionDep,
+    UpdateChannelDep,
     UpdateSectorDep,
     UpdateUserDep,
 )
@@ -53,6 +61,29 @@ def _ip(request: Request) -> str | None:
     except ValueError:
         return None
     return host
+
+
+def _storage_stats(root: Path) -> tuple[int, int]:
+    total = 0
+    files = 0
+    if not root.exists():
+        return 0, 0
+    for path in root.rglob("*"):
+        if path.is_file():
+            try:
+                total += path.stat().st_size
+                files += 1
+            except OSError:
+                continue
+    return total, files
+
+
+def _disk_stats(root: Path) -> tuple[int, int]:
+    probe = root if root.exists() else root.resolve()
+    while not probe.exists():
+        probe = probe.parent
+    usage = shutil.disk_usage(probe)
+    return usage.free, usage.total
 
 
 @router.get("/users", response_model=list[UserOut])
@@ -135,9 +166,19 @@ async def list_sectors(_: AdminDep, session: SessionDep) -> list[SectorOut]:
 
 
 @router.post("/sectors", response_model=SectorOut, status_code=status.HTTP_201_CREATED)
-async def create_sector(body: CreateSectorIn, use_case: CreateSectorDep) -> SectorOut:
+async def create_sector(
+    body: CreateSectorIn,
+    request: Request,
+    admin: AdminDep,
+    use_case: CreateSectorDep,
+) -> SectorOut:
     sector = await use_case.execute(
-        CreateSectorCommand(name=body.name, description=body.description)
+        CreateSectorCommand(
+            name=body.name,
+            description=body.description,
+            actor_id=admin.id,
+            ip=_ip(request),
+        )
     )
     return SectorOut(
         id=sector.id, name=sector.name, slug=sector.slug, description=sector.description
@@ -163,6 +204,55 @@ async def update_sector(
     )
     return SectorOut(
         id=sector.id, name=sector.name, slug=sector.slug, description=sector.description
+    )
+
+
+@router.get("/channels", response_model=list[ChannelOut])
+async def list_channels(
+    _: AdminDep,
+    use_case: ListChannelsDep,
+    sector_id: Annotated[UUID | None, Query()] = None,
+    include_archived: bool = True,
+) -> list[ChannelOut]:
+    summaries = await use_case.execute()
+    if sector_id is not None:
+        summaries = [s for s in summaries if s.conversation.sector_id == sector_id]
+    if not include_archived:
+        summaries = [s for s in summaries if s.conversation.archived_at is None]
+    return [ChannelOut.from_summary(s) for s in summaries]
+
+
+@router.patch("/channels/{channel_id}", response_model=ChannelOut)
+async def update_channel(
+    channel_id: UUID,
+    body: UpdateChannelIn,
+    request: Request,
+    admin: AdminDep,
+    session: SessionDep,
+    use_case: UpdateChannelDep,
+) -> ChannelOut:
+    channel = await use_case.execute(
+        UpdateChannelCommand(
+            channel_id=channel_id,
+            actor_id=admin.id,
+            name=body.name,
+            archived=body.archived,
+            ip=_ip(request),
+        )
+    )
+    members = await SqlAlchemyConversationRepository(session).list_members(channel.id)
+    member_count = len([m for m in members if m.left_at is None])
+    sector_name = None
+    if channel.sector_id is not None:
+        sector = await SqlAlchemySectorRepository(session).get_by_id(channel.sector_id)
+        sector_name = sector.name if sector else None
+    return ChannelOut(
+        id=channel.id,
+        name=channel.name,
+        sector_id=channel.sector_id,
+        sector_name=sector_name,
+        member_count=member_count,
+        archived_at=channel.archived_at.isoformat() if channel.archived_at else None,
     )
 
 
@@ -197,10 +287,14 @@ async def list_audit(
 
 
 @router.get("/stats", response_model=StatsOut)
-async def stats(_: AdminDep, session: SessionDep) -> StatsOut:
+async def stats(_: AdminDep, session: SessionDep, request: Request) -> StatsOut:
     async def count(model: Any) -> int:
         value = await session.scalar(select(func.count()).select_from(model))
         return int(value or 0)
+
+    storage_root = Path(str(request.app.state.settings.storage_dir))
+    storage_bytes, storage_files = _storage_stats(storage_root)
+    disk_free, disk_total = _disk_stats(storage_root)
 
     return StatsOut(
         users=await count(UserRow),
@@ -208,4 +302,8 @@ async def stats(_: AdminDep, session: SessionDep) -> StatsOut:
         conversations=await count(ConversationRow),
         messages=await count(MessageRow),
         attachments=await count(AttachmentRow),
+        storage_bytes=storage_bytes,
+        storage_files=storage_files,
+        disk_free_bytes=disk_free,
+        disk_total_bytes=disk_total,
     )

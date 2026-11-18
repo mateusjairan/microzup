@@ -3,10 +3,13 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Response, status
 
 from app.application.use_cases.conversations import (
+    ListConversationMembersCommand,
     OpenDirectMessageCommand,
 )
 from app.application.use_cases.messages import ListMessagesCommand, MarkReadCommand
+from app.domain.entities.conversation import Conversation
 from app.presentation.api.schemas import (
+    ConversationMemberOut,
     ConversationOut,
     ConversationSummaryOut,
     MarkReadIn,
@@ -15,6 +18,7 @@ from app.presentation.api.schemas import (
 )
 from app.presentation.deps import (
     CurrentUserDep,
+    ListConversationMembersDep,
     ListConversationsDep,
     ListMessagesDep,
     MarkReadDep,
@@ -24,6 +28,22 @@ from app.presentation.deps import (
 router = APIRouter(tags=["conversations"])
 
 
+def _conversation_out(
+    conversation: Conversation,
+    peer_id: UUID | None = None,
+    peer_is_active: bool | None = None,
+) -> ConversationOut:
+    return ConversationOut(
+        id=conversation.id,
+        kind=conversation.kind,
+        name=conversation.name,
+        sector_id=conversation.sector_id,
+        archived_at=(conversation.archived_at.isoformat() if conversation.archived_at else None),
+        peer_id=peer_id,
+        peer_is_active=peer_is_active,
+    )
+
+
 @router.get("/conversations", response_model=list[ConversationSummaryOut])
 async def list_conversations(
     current: CurrentUserDep, use_case: ListConversationsDep
@@ -31,14 +51,11 @@ async def list_conversations(
     summaries = await use_case.execute(current.id)
     return [
         ConversationSummaryOut(
-            conversation=ConversationOut(
-                id=s.conversation.id,
-                kind=s.conversation.kind,
-                name=s.conversation.name,
-                sector_id=s.conversation.sector_id,
-                peer_id=s.peer_id,
+            conversation=_conversation_out(
+                s.conversation, peer_id=s.peer_id, peer_is_active=s.peer_is_active
             ),
             unread_count=s.unread_count,
+            last_read_seq=s.last_read_seq,
             last_message=(MessageOut.from_message(s.last_message) if s.last_message else None),
         )
         for s in summaries
@@ -47,16 +64,34 @@ async def list_conversations(
 
 @router.post("/conversations/dm", response_model=ConversationOut)
 async def open_dm(body: OpenDmIn, current: CurrentUserDep, use_case: OpenDmDep) -> ConversationOut:
-    conversation = await use_case.execute(
+    result = await use_case.execute(
         OpenDirectMessageCommand(actor_id=current.id, other_user_id=body.user_id)
     )
-    return ConversationOut(
-        id=conversation.id,
-        kind=conversation.kind,
-        name=conversation.name,
-        sector_id=conversation.sector_id,
-        peer_id=body.user_id,
+    return _conversation_out(
+        result.conversation, peer_id=result.peer_id, peer_is_active=result.peer_is_active
     )
+
+
+@router.get("/conversations/{conversation_id}/members", response_model=list[ConversationMemberOut])
+async def list_conversation_members(
+    conversation_id: UUID,
+    current: CurrentUserDep,
+    use_case: ListConversationMembersDep,
+) -> list[ConversationMemberOut]:
+    """Membros reais da conversa com papel e presença (autorização revalidada)."""
+    infos = await use_case.execute(
+        ListConversationMembersCommand(conversation_id=conversation_id, requester_id=current.id)
+    )
+    return [
+        ConversationMemberOut(
+            user_id=info.user.id,
+            username=info.user.username,
+            display_name=info.user.display_name,
+            role=info.conversation_role,
+            presence=info.presence,
+        )
+        for info in infos
+    ]
 
 
 @router.get("/conversations/{conversation_id}/messages", response_model=list[MessageOut])

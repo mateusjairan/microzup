@@ -1,10 +1,22 @@
 # -*- mode: python ; coding: utf-8 -*-
+# Build: uv run pyinstaller microzup.spec --noconfirm
+#
+# Nota: o exe lê a configuração de variáveis de ambiente e do `.env` no
+# diretório onde é EXECUTADO (não de onde está gravado) — em produção, o
+# instalador coloca um .env ao lado do serviço (scripts/install-server.ps1).
+
+from PyInstaller.utils.hooks import collect_all
+
+# python-magic-bin (win32) empacota a DLL de libmagic e a base magic.mgc
+# DENTRO do pacote `magic` (magic/libmagic/). Sem isto o exe falha em runtime
+# com "failed to find libmagic" no primeiro upload.
+magic_datas, magic_binaries, magic_hiddenimports = collect_all("magic")
 
 a = Analysis(
     ["app/run.py"],
     pathex=["."],
-    binaries=[],
-    datas=[],
+    binaries=magic_binaries,
+    datas=magic_datas,
     hiddenimports=[
         "sqlalchemy.dialects.postgresql.psycopg",
         "psycopg",
@@ -14,6 +26,7 @@ a = Analysis(
         "uvicorn.protocols.http.auto",
         "uvicorn.protocols.websockets.auto",
         "uvicorn.lifespan.on",
+        *magic_hiddenimports,
     ],
     hookspath=[],
     runtime_hooks=[],

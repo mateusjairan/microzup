@@ -1,42 +1,36 @@
-from dataclasses import dataclass
-from uuid import UUID
-
+from app.application.dto import UpdateSectorCommand
 from app.domain.entities.sector import Sector
 from app.domain.exceptions import NotFoundError, SectorAlreadyExists
-from app.domain.ports.audit import AuditLogSink
 from app.domain.ports.clock import Clock
 from app.domain.ports.repositories import ConversationRepository, SectorRepository
 from app.domain.ports.unit_of_work import UnitOfWork
 
-
-@dataclass(frozen=True, slots=True)
-class UpdateSectorCommand:
-    target_id: UUID
-    name: str
-    description: str | None
-    actor_id: UUID | None = None
-    ip: str | None = None
+__all__ = ["UpdateSector", "UpdateSectorCommand"]
 
 
 class UpdateSector:
+    """Atualiza setor (e renomeia o canal vinculado, plano §5).
+
+    A auditoria `sector.update` é aplicada por composição com o decorator
+    `@audit` na borda de DI (deps.py) — não dentro da regra.
+    """
+
     def __init__(
         self,
         sectors: SectorRepository,
         conversations: ConversationRepository,
-        audit: AuditLogSink,
         uow: UnitOfWork,
         clock: Clock,
     ) -> None:
         self._sectors = sectors
         self._conversations = conversations
-        self._audit = audit
         self._uow = uow
         self._clock = clock
 
     async def execute(self, command: UpdateSectorCommand) -> Sector:
-        target = await self._sectors.get_by_id(command.target_id)
-        if target is None:
-            raise NotFoundError("Setor não encontrado.")
+        target = await self._sectors.get_or_raise(
+            command.target_id, NotFoundError("Setor não encontrado.")
+        )
 
         updated = target.with_details(command.name, command.description)
 
@@ -51,13 +45,5 @@ class UpdateSector:
                 channel = await self._conversations.get_channel_by_sector(target.id)
                 if channel is not None:
                     await self._conversations.update(channel.with_name(updated.name))
-            await self._audit.record(
-                "sector.update",
-                "sector",
-                str(updated.id),
-                command.actor_id,
-                {"name": updated.name, "description": updated.description},
-                command.ip,
-            )
 
         return updated

@@ -92,3 +92,43 @@ async def test_rejects_name_shorter_than_two_characters() -> None:
         await use_case.execute(CreateSectorCommand(name="A"))
 
     assert repo.sectors == []
+
+
+async def test_creates_sector_audits_with_actor_and_ip() -> None:
+    from uuid import uuid4
+
+    from app.application.audit import apply_audit
+
+    from tests.unit.fakes import FakeConversationRepository, FakeEventBus, audit_events
+
+    sectors = FakeSectorRepository()
+    bus = FakeEventBus()
+    use_case = CreateSector(
+        sectors,
+        FakeUnitOfWork(),
+        FixedClock(),
+        conversations=FakeConversationRepository(),
+    )
+    # Auditoria por composição: mesmo decorator aplicado em deps.py.
+    apply_audit(
+        use_case,
+        bus,
+        action="sector.create",
+        entity_type="sector",
+        entity_id=lambda cmd, result: str(result.id),
+        actor=lambda cmd: cmd.actor_id,
+        metadata=lambda cmd, result: {"name": result.name, "slug": result.slug},
+        ip=lambda cmd: cmd.ip,
+    )
+    actor_id = uuid4()
+
+    sector = await use_case.execute(
+        CreateSectorCommand(name="Qualidade", description="QA", actor_id=actor_id, ip="10.1.1.5")
+    )
+
+    records = audit_events(bus)
+    assert records[0].action == "sector.create"
+    assert records[0].actor_id == actor_id
+    assert records[0].ip == "10.1.1.5"
+    assert records[0].entity_id == str(sector.id)
+    assert records[0].metadata["slug"] == sector.slug

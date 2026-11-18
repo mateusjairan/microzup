@@ -46,6 +46,12 @@ class Conversation:
     def with_name(self, name: str) -> "Conversation":
         return replace(self, name=name)
 
+    def archive(self, now: datetime) -> "Conversation":
+        return replace(self, archived_at=now)
+
+    def unarchive(self) -> "Conversation":
+        return replace(self, archived_at=None)
+
     @classmethod
     def create_dm(cls, user_a: UUID, user_b: UUID, now: datetime) -> "Conversation":
         if user_a == user_b:
@@ -87,6 +93,35 @@ class ConversationMember:
         )
 
     def leave(self, now: datetime) -> "ConversationMember":
-        from dataclasses import replace
-
         return replace(self, left_at=now)
+
+    def rejoin(self, now: datetime) -> "ConversationMember":
+        return replace(self, left_at=None, joined_at=now)
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationFactory:
+    """Cria DM ou canal de setor aplicando as regras de membros e `dm_key` (plano §4.2).
+
+    - DM: rejeita conversa consigo mesmo, gera o `dm_key` canônico e devolve a
+      conversa já com os DOIS membros (par 1:1, plano §2).
+    - Canal de setor: nasce sem membros — a adesão é materializada por usuário
+      na criação/mudança de setor (plano §5), nunca aqui.
+    """
+
+    @staticmethod
+    def open_dm(
+        user_a: UUID, user_b: UUID, now: datetime
+    ) -> tuple[Conversation, tuple[ConversationMember, ConversationMember]]:
+        conversation = Conversation.create_dm(user_a, user_b, now)
+        members = (
+            ConversationMember.create(conversation.id, user_a, now),
+            ConversationMember.create(conversation.id, user_b, now),
+        )
+        return conversation, members
+
+    @staticmethod
+    def open_channel(
+        sector_id: UUID, name: str, created_by: UUID | None, now: datetime
+    ) -> Conversation:
+        return Conversation.create_channel(sector_id, name, created_by, now)

@@ -1,24 +1,14 @@
-from dataclasses import dataclass
-
+from app.application.dto import RefreshCommand, RefreshResult
+from app.application.events import AuditRequested
 from app.domain.entities.session import UserSession
 from app.domain.exceptions import InactiveUserError, InvalidTokenError
-from app.domain.ports.audit import AuditLogSink
 from app.domain.ports.clock import Clock
+from app.domain.ports.events import EventBus
 from app.domain.ports.repositories import SessionRepository, UserRepository
 from app.domain.ports.security import AccessTokenIssuer, RefreshTokenIssuer
 from app.domain.ports.unit_of_work import UnitOfWork
 
-
-@dataclass(frozen=True, slots=True)
-class RefreshCommand:
-    refresh_token: str
-    ip: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class RefreshResult:
-    access_token: str
-    refresh_token: str
+__all__ = ["Refresh", "RefreshCommand", "RefreshResult"]
 
 
 class Refresh:
@@ -28,7 +18,7 @@ class Refresh:
         sessions: SessionRepository,
         access_tokens: AccessTokenIssuer,
         refresh_tokens: RefreshTokenIssuer,
-        audit: AuditLogSink,
+        events: EventBus,
         uow: UnitOfWork,
         clock: Clock,
     ) -> None:
@@ -36,7 +26,7 @@ class Refresh:
         self._sessions = sessions
         self._access_tokens = access_tokens
         self._refresh_tokens = refresh_tokens
-        self._audit = audit
+        self._events = events
         self._uow = uow
         self._clock = clock
 
@@ -67,13 +57,15 @@ class Refresh:
         async with self._uow:
             await self._sessions.update(session.revoke(now))
             await self._sessions.add(new_session)
-            await self._audit.record(
-                "auth.refresh",
-                "session",
-                str(new_session.id),
-                user.id,
-                None,
-                command.ip,
+
+        await self._events.publish(
+            AuditRequested(
+                action="auth.refresh",
+                entity_type="session",
+                entity_id=str(new_session.id),
+                actor_id=user.id,
+                ip=command.ip,
             )
+        )
 
         return RefreshResult(access_token=access_token, refresh_token=raw_refresh)

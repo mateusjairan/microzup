@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from ipaddress import ip_address
 from uuid import UUID
 
 from fastapi import APIRouter, Request, UploadFile, status
@@ -22,6 +23,17 @@ from app.presentation.deps import (
 router = APIRouter(tags=["files"])
 
 _CHUNK = 1024 * 1024
+
+
+def _client_ip(request: Request) -> str | None:
+    host = request.client.host if request.client is not None else None
+    if host is None:
+        return None
+    try:
+        ip_address(host)
+    except ValueError:
+        return None
+    return host
 
 
 async def _chunks(file: UploadFile) -> AsyncIterator[bytes]:
@@ -50,10 +62,15 @@ async def upload_file(
 
 @router.get("/files/{attachment_id}")
 async def download_file(
-    attachment_id: UUID, current: CurrentUserDep, use_case: DownloadFileDep
+    attachment_id: UUID,
+    request: Request,
+    current: CurrentUserDep,
+    use_case: DownloadFileDep,
 ) -> FileResponse:
     attachment, path = await use_case.execute(
-        DownloadFileCommand(attachment_id=attachment_id, actor_id=current.id)
+        DownloadFileCommand(
+            attachment_id=attachment_id, actor_id=current.id, ip=_client_ip(request)
+        )
     )
     return FileResponse(
         path=path,
@@ -61,6 +78,25 @@ async def download_file(
         media_type="application/octet-stream",
         content_disposition_type="attachment",
     )
+
+
+@router.get("/files/{attachment_id}/thumbnail")
+async def download_thumbnail(
+    attachment_id: UUID,
+    request: Request,
+    current: CurrentUserDep,
+    use_case: DownloadFileDep,
+) -> FileResponse:
+    """Prévia de imagem 480 px (plano-frontend §8.6), autorizada por participação."""
+    _, path = await use_case.execute(
+        DownloadFileCommand(
+            attachment_id=attachment_id,
+            actor_id=current.id,
+            ip=_client_ip(request),
+            thumbnail=True,
+        )
+    )
+    return FileResponse(path=path, media_type="image/jpeg")
 
 
 @router.get("/messages/{message_id}/attachments", response_model=list[AttachmentOut])

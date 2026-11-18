@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     refresh_token_ttl_days: int = 30
     ws_ticket_ttl_seconds: int = 30
     login_max_attempts: int = 5
+    login_lockout_seconds: int = 300
+
+    # Rate limit em memória (plano §8: login, upload e envio de mensagem).
+    rate_limit_login_per_minute: int = 10
+    rate_limit_upload_per_minute: int = 20
+    rate_limit_message_per_minute: int = 30
 
     cors_origins: str = "http://localhost:5173"
 
@@ -39,8 +45,19 @@ class Settings(BaseSettings):
     orphan_attachment_ttl_hours: int = 24
     message_max_chars: int = 8000
 
+    # Timeouts por conexão no engine (plano §8).
+    statement_timeout_ms: int = 15000
+    idle_in_transaction_session_timeout_ms: int = 30000
+
+    # Logs estruturados com rotação diária (plano §8).
+    log_dir: Path = Path("./data/logs")
+    log_retention_days: int = 14
+
     message_retention_days: int = 0
     file_retention_days: int = 0
+    # Intervalo da task de retenção no lifespan (plano §8); 0 desliga a task
+    # (a CLI `retention-run` continua disponível para operação explícita).
+    retention_interval_seconds: int = 3600
 
     @property
     def cors_origin_list(self) -> list[str]:

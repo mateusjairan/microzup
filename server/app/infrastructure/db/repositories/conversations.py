@@ -1,7 +1,7 @@
+from typing import ClassVar
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.conversation import Conversation, ConversationMember
 from app.infrastructure.db.mappers import (
@@ -11,6 +11,7 @@ from app.infrastructure.db.mappers import (
     member_to_row,
 )
 from app.infrastructure.db.models import ConversationMemberRow, ConversationRow
+from app.infrastructure.db.repositories.base import BaseSqlAlchemyRepository
 
 
 def _dm_key(user_a: UUID, user_b: UUID) -> str:
@@ -18,9 +19,11 @@ def _dm_key(user_a: UUID, user_b: UUID) -> str:
     return f"{ordered[0]}:{ordered[1]}"
 
 
-class SqlAlchemyConversationRepository:
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+class SqlAlchemyConversationRepository(BaseSqlAlchemyRepository[ConversationRow, Conversation]):
+    _row_type: ClassVar[type[ConversationRow]] = ConversationRow
+
+    def _to_domain(self, row: ConversationRow) -> Conversation:
+        return conversation_to_domain(row)
 
     async def add(self, conversation: Conversation) -> None:
         self._session.add(conversation_to_row(conversation))
@@ -29,10 +32,6 @@ class SqlAlchemyConversationRepository:
     async def update(self, conversation: Conversation) -> None:
         await self._session.merge(conversation_to_row(conversation))
         await self._session.flush()
-
-    async def get_by_id(self, conversation_id: UUID) -> Conversation | None:
-        row = await self._session.get(ConversationRow, conversation_id)
-        return None if row is None else conversation_to_domain(row)
 
     async def get_channel_by_sector(self, sector_id: UUID) -> Conversation | None:
         row = await self._session.scalar(
@@ -65,7 +64,17 @@ class SqlAlchemyConversationRepository:
                 .order_by(ConversationRow.created_at)
             )
         ).all()
-        return [conversation_to_domain(row) for row in rows]
+        return [self._to_domain(row) for row in rows]
+
+    async def list_channels(self) -> list[Conversation]:
+        rows = (
+            await self._session.scalars(
+                select(ConversationRow)
+                .where(ConversationRow.kind == "channel")
+                .order_by(ConversationRow.name)
+            )
+        ).all()
+        return [self._to_domain(row) for row in rows]
 
     async def add_member(self, member: ConversationMember) -> None:
         self._session.add(member_to_row(member))
