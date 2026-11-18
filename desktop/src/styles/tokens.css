@@ -1,4 +1,15 @@
+/*
+ * Microzup — design tokens (docs/plano-frontend.md §6).
+ * Fonte empacotada (woff2 local, zero CDN): Inter Variable via @fontsource.
+ * Tema: atributo [data-theme] no root (controlado pelo ThemeProvider);
+ * o fallback via prefers-color-scheme mantém o modo do SO antes de qualquer JS.
+ */
+@import "@fontsource-variable/inter/standard.css";
+
 :root {
+  color-scheme: light;
+
+  /* — Cores · light (§6) — */
   --bg-app: #f5f6f8;
   --bg-surface: #ffffff;
   --bg-sidebar: #fbfbfc;
@@ -7,20 +18,149 @@
   --border: #e3e6ea;
   --text: #14181f;
   --text-2: #5a6472;
-  --text-3: #8a94a3;
+  /* Acessibilidade (§2.8/§10: contraste de texto ≥ 4,5:1): o #8a94a3 do
+     §6 dava ~3:1 e violava o próprio requisito do plano. Testado contra TODOS
+     os fundos claros (bg-app/surface/sidebar/hover/selected/accent-soft):
+     #5f6b79 dá ≥ 4,7:1 em todos (mesma família de cinza-azulado discreto). */
+  --text-3: #5f6b79;
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
   --accent-soft: #e8f0fe;
   --danger: #dc2626;
   --success: #16a34a;
+  /* Verde seguro como COR DE TEXTO em fundos claros (§10: ≥4,5:1) — o
+     --success fica reservado a dot/presença (regra não-texto 3:1). */
+  --success-text: #166534;
   --warning: #d97706;
   --dnd: #7c3aed;
   --offline: #94a3b8;
   --titlebar: #ffffff;
+
+  /* — Presença (§6: SEMPRE dot + texto/aria, nunca só cor) — */
+  --presence-available: #16a34a;
+  --presence-busy: #dc2626;
+  --presence-away: #d97706;
+  --presence-dnd: #7c3aed;
+  --presence-invisible: #94a3b8;
+  --presence-offline: #94a3b8;
+
+  /* Anel de contraste do dot — a cor do fundo onde o dot assenta */
+  --presence-ring: var(--bg-sidebar);
+
+  /* — Fallback de avatar: paleta determinística (branco legível em todas) — */
+  --avatar-0: #2563eb;
+  --avatar-1: #0f766e;
+  --avatar-2: #7c3aed;
+  --avatar-3: #92400e;
+  --avatar-4: #be123c;
+  --avatar-5: #3f6212;
+
+  /* — Tipografia (§6): Inter Variable + fallback Segoe UI — */
+  --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif;
+  --fs-meta: 12px;   /* meta, timestamps, contadores */
+  --fs-list: 13px;   /* linhas de lista (contatos, resultados) */
+  --fs-body: 14px;   /* corpo/mensagem */
+  --fs-panel: 16px;  /* título de painel */
+  --fs-title: 20px;  /* título de tela */
+  --fs-display: 24px; /* login */
+  --lh-body: 1.45;
+  --lh-title: 1.3;
+
+  /* — Espaço: 4 · 8 · 12 · 16 · 24 · 32 — */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* — Raio: 6 (chips) · 10 (cards) · 12 (janela) · full (avatares) — */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* — Elevação: apenas 3 níveis (§6) — */
+  --shadow-1: 0 1px 2px rgba(15, 19, 25, 0.08);
+  --shadow-2: 0 6px 20px rgba(15, 19, 25, 0.12);
+  --shadow-3: 0 16px 48px rgba(15, 19, 25, 0.24);
+
+  /* — Movimento: 120 ms (hover) · 180 ms (painéis) · 240 ms (modal) · ease-out — */
+  --motion-fast: 120ms;
+  --motion-panel: 180ms;
+  --motion-modal: 240ms;
+  --ease: ease-out;
+
+  /* — Foco visível: 2 px (§10) — */
+  --focus-width: 2px;
+  --focus-color: var(--accent);
+
+  /* — Scrim de modal/palette (leve) e lightbox (pesado) — */
+  --overlay-scrim: rgba(15, 19, 25, 0.45);
+  --overlay-heavy: rgba(10, 12, 16, 0.85);
+
+  /* — Constantes de layout de componentes — */
+  --toast-width: 340px;
+  --filecard-width: 280px;
+
+  /* — Densidade (§2: densa com respiro) — */
+  --row-height: 32px;
+  --sidebar-width: 280px;
+  --sidebar-collapsed-width: 72px;
+  --titlebar-height: 44px;
+  --details-width: 260px;
+  /* Thumbnail de imagem em mensagem (§7) */
+  --image-thumb-max: 480px;
+  --image-thumb-height: 320px;
 }
 
+/* Tema escuro explícito (provider controla o atributo no root) */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-app: #0f1319;
+  --bg-surface: #161b23;
+  --bg-sidebar: #12171e;
+  --bg-hover: #1e2530;
+  --bg-selected: #1b2a45;
+  --border: #242c38;
+  --text: #e6eaf0;
+  --text-2: #a2adbd;
+  --text-3: #6e7a8c;
+  --accent: #4f8cff;
+  --accent-hover: #6c9cff;
+  --accent-soft: #1b2a45;
+  --danger: #ef4444;
+  --success: #22c55e;
+  /* Verde seguro como COR DE TEXTO em superfícies escuras (§10: ≥4,5:1). */
+  --success-text: #4ade80;
+  --warning: #f59e0b;
+  --dnd: #8b5cf6;
+  --offline: #9daabe;
+  --titlebar: #0f1319;
+
+  /* Presença: mesmos matizes, +8% de luminosidade (mistura de 8% de branco) */
+  --presence-available: #29aa58;
+  --presence-busy: #df3737;
+  --presence-away: #dc821a;
+  --presence-dnd: #864aee;
+  --presence-invisible: #9daabe;
+  --presence-offline: #9daabe;
+
+  --presence-ring: var(--bg-sidebar);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 16px 48px rgba(0, 0, 0, 0.6);
+
+  --focus-color: var(--accent);
+}
+
+/* Seguir o SO enquanto nenhum atributo explícito existir (pré-provider) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
     --bg-app: #0f1319;
     --bg-surface: #161b23;
     --bg-sidebar: #12171e;
@@ -33,6 +173,136 @@
     --accent: #4f8cff;
     --accent-hover: #6c9cff;
     --accent-soft: #1b2a45;
+    --danger: #ef4444;
+    --success: #22c55e;
+    /* Verde seguro como COR DE TEXTO em superfícies escuras (§10: ≥4,5:1). */
+    --success-text: #4ade80;
+    --warning: #f59e0b;
+    --dnd: #8b5cf6;
+    --offline: #9daabe;
     --titlebar: #0f1319;
+
+    --presence-available: #29aa58;
+    --presence-busy: #df3737;
+    --presence-away: #dc821a;
+    --presence-dnd: #864aee;
+    --presence-invisible: #9daabe;
+    --presence-offline: #9daabe;
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 6px 20px rgba(0, 0, 0, 0.45);
+    --shadow-3: 0 16px 48px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* — Utilidades compartilhadas — */
+
+/* Números tabulares em horários, contadores e tamanhos (§6) */
+.nums-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Transições sempre pelos tokens: 120 ms hover · 180 ms painéis · 240 ms modal */
+.tz-colors {
+  transition-property: color, background-color, border-color, opacity, box-shadow;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease);
+}
+
+.tz-panel {
+  transition-property: transform, opacity;
+  transition-duration: var(--motion-panel);
+  transition-timing-function: var(--ease);
+}
+
+.tz-modal {
+  transition-property: transform, opacity;
+  transition-duration: var(--motion-modal);
+  transition-timing-function: var(--ease);
+}
+
+/* Foco visível de 2 px em tudo (§10) */
+:focus-visible {
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: 2px;
+}
+
+/* Texto apenas para leitores de tela */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* — Keyframes compartilhadas (durasções via tokens; opacity, sem deslocamento) — */
+
+@keyframes mz-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 3 pontos do "digitando…" — desligados por prefers-reduced-motion (abaixo) */
+@keyframes mz-typing-dot {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  30%,
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Skeleton — pulso de opacidade, sem deslocamento */
+@keyframes mz-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+/* "Chamar atenção": flash sutil do véu de destaque (NUNCA shake, §8.4/§16) */
+@keyframes mz-nudge-flash {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.55;
+  }
+  28% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.3;
+  }
+  60%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* prefers-reduced-motion: corte seco — nenhuma animação/transição (§6/§10) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }
