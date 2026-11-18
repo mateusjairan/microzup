@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [int]$ApiPort = 8000,
+    [int]$ApiPort = 8666,
     [switch]$SkipDb
 )
 

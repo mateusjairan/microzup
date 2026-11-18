@@ -554,7 +554,7 @@ Contrato em `server/.env.example`; segredos reais nunca entram no Git.
 | Variável | Padrão | Função |
 |---|---|---|
 | `APP_ENV` | `development` | `development` \| `production` |
-| `HOST` / `PORT` | `0.0.0.0` / `8000` | bind do Uvicorn |
+| `HOST` / `PORT` | `0.0.0.0` / `8666` | bind do Uvicorn |
 | `DATABASE_URL` | — | conexão como `microzup_app` |
 | `MIGRATION_DATABASE_URL` | — | conexão como `microzup_owner`, usada só pelo Alembic |
 | `JWT_SECRET` | — | ≥ 32 bytes aleatórios; ausência impede o boot |

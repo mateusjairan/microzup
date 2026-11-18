@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     app_env: Literal["development", "test", "production"] = "development"
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8666
     log_level: str = "INFO"
 
     database_url: str = (

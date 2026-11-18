@@ -21,7 +21,7 @@ const SERVER_KEY = "microzup.server";
 
 export async function getServerUrl(): Promise<string> {
   if (window.microzup) return window.microzup.getServerUrl();
-  return localStorage.getItem(SERVER_KEY) ?? "http://localhost:8000";
+  return localStorage.getItem(SERVER_KEY) ?? "http://localhost:8666";
 }
 
 export async function setServerUrl(url: string): Promise<void> {

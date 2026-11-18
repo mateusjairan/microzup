@@ -43,7 +43,7 @@ docker compose -f server/docker-compose.yml up -d
 cd server
 uv sync
 uv run alembic upgrade head
-uv run uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 8666
 ```
 
 O primeiro administrador é criado por CLI, com senha lida de forma interativa:

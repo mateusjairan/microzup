@@ -52,7 +52,7 @@ docker compose -f server/docker-compose.yml up -d
 # Backend (a partir de server/)
 uv sync
 uv run alembic upgrade head
-uv run uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 8666
 
 # Bootstrap do primeiro admin (senha via getpass, nunca em argumento)
 uv run python -m app.cli create-admin --username admin
@@ -76,7 +76,7 @@ npm run build
 npm run dist
 ```
 
-Portas: API `8000`, Vite `5173`, Postgres `55432` no host (container; 5432 costuma estar ocupada por um Postgres local).
+Portas: API `8666`, Vite `5173`, Postgres `55432` no host (container; 5432 costuma estar ocupada por um Postgres local).
 Ambiente: Windows + PowerShell; não use sintaxe bash em scripts do repositório.
 
 ## 5. Regras de arquitetura (backend)

@@ -103,7 +103,7 @@ Microzup
 │   Microzup                                   │
 │   Chat interno · rede local                  │
 │                                              │
-│   Servidor  [ 192.168.0.10:8000        ] ⟳   │
+│   Servidor  [ 192.168.0.10:8666        ] ⟳   │
 │   Usuário   [ ana.souza                ]     │
 │   Senha     [ ••••••••••••             ] 👁  │
 │                                              │

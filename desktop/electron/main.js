@@ -60,7 +60,7 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
-    ipcMain.handle("server:get", () => readConfig().serverUrl || "http://localhost:8000");
+    ipcMain.handle("server:get", () => readConfig().serverUrl || "http://localhost:8666");
     ipcMain.handle("server:set", (_e, url) => writeConfig({ serverUrl: url }).serverUrl);
 
     ipcMain.handle("token:set", (_e, tokens) => {

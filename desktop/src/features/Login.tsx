@@ -82,7 +82,7 @@ export function Login() {
           <Input
             value={server}
             onChange={(e) => setServer(e.target.value)}
-            placeholder="http://192.168.0.10:8000"
+            placeholder="http://192.168.0.10:8666"
           />
           <Button type="button" variant="ghost" onClick={testConnection} disabled={testing}>
             {testing ? <Spinner /> : t.login.testConnection}
