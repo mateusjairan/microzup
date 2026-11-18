@@ -44,24 +44,28 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     hub: WebSocketHub = websocket.app.state.hub
 
     await hub.connect(user_id, websocket)
+    await websocket.send_json(
+        {
+            "type": "hello",
+            "seq": 0,
+            "ts": _now(),
+            "payload": {
+                "version": "0.1.0",
+                "user_id": str(user_id),
+                "presence": hub.presence_snapshot(),
+            },
+        }
+    )
     await hub.broadcast_all(
         {
             "type": "presence.changed",
             "seq": 0,
             "ts": _now(),
-            "payload": {"user_id": str(user_id), "status": "online"},
+            "payload": {"user_id": str(user_id), "status": "available"},
         }
     )
 
     try:
-        await websocket.send_json(
-            {
-                "type": "hello",
-                "seq": 0,
-                "ts": _now(),
-                "payload": {"version": "0.1.0", "user_id": str(user_id)},
-            }
-        )
         while True:
             data = await websocket.receive_json()
             await _handle_client_message(websocket, hub, user_id, data)
@@ -69,14 +73,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         pass
     finally:
         await hub.disconnect(user_id, websocket)
-        await hub.broadcast_all(
-            {
-                "type": "presence.changed",
-                "seq": 0,
-                "ts": _now(),
-                "payload": {"user_id": str(user_id), "status": "offline"},
-            }
-        )
+        if user_id not in hub.online_user_ids():
+            await hub.broadcast_all(
+                {
+                    "type": "presence.changed",
+                    "seq": 0,
+                    "ts": _now(),
+                    "payload": {"user_id": str(user_id), "status": "offline"},
+                }
+            )
 
 
 async def _handle_client_message(
@@ -88,6 +93,18 @@ async def _handle_client_message(
     message_type = data.get("type")
     if message_type == "ping":
         await websocket.send_json({"type": "pong", "seq": 0, "ts": _now(), "payload": {}})
+        return
+    if message_type == "presence.set":
+        status = data.get("status")
+        if isinstance(status, str) and hub.set_status(user_id, status):
+            await hub.broadcast_all(
+                {
+                    "type": "presence.changed",
+                    "seq": 0,
+                    "ts": _now(),
+                    "payload": {"user_id": str(user_id), "status": hub.status_of(user_id)},
+                }
+            )
         return
     if message_type == "typing":
         await hub.broadcast_all(

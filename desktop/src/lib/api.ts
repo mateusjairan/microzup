@@ -1,4 +1,4 @@
-import { getServerUrl, loadTokens, saveTokens } from "./bridge";
+import { clearTokens, getServerUrl, loadTokens, saveFile, saveTokens } from "./bridge";
 import type { Tokens } from "../types";
 
 let accessToken: string | null = null;
@@ -33,7 +33,6 @@ export function getRefreshToken(): string | null {
 export async function clear(): Promise<void> {
   accessToken = null;
   refreshToken = null;
-  const { clearTokens } = await import("./bridge");
   await clearTokens();
 }
 
@@ -93,6 +92,5 @@ export async function downloadFile(path: string, filename: string): Promise<void
     throw new ApiError(response.status, "download", "download_failed");
   }
   const buffer = await response.arrayBuffer();
-  const { saveFile } = await import("./bridge");
   await saveFile(filename, new Uint8Array(buffer));
 }

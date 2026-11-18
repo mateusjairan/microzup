@@ -16,6 +16,7 @@ class UpdateUserCommand:
     actor_id: UUID
     role: str | None = None
     sector_id: UUID | None = None
+    clear_sector: bool = False
     is_active: bool | None = None
     ip: str | None = None
 
@@ -51,6 +52,9 @@ class UpdateUser:
         if command.sector_id is not None and command.sector_id != target.sector_id:
             updated = updated.with_sector(command.sector_id, now)
             changes["sector_id"] = str(command.sector_id)
+        elif command.clear_sector and target.sector_id is not None:
+            updated = updated.with_sector(None, now)
+            changes["sector_id"] = None
 
         if not changes:
             return target

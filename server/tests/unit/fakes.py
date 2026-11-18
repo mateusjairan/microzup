@@ -27,6 +27,12 @@ class FakeSectorRepository:
     async def add(self, sector: Sector) -> None:
         self.sectors.append(sector)
 
+    async def update(self, sector: Sector) -> None:
+        self.sectors = [sector if s.id == sector.id else s for s in self.sectors]
+
+    async def get_by_id(self, sector_id: UUID) -> Sector | None:
+        return next((s for s in self.sectors if s.id == sector_id), None)
+
     async def get_by_slug(self, slug: str) -> Sector | None:
         return next((s for s in self.sectors if s.slug == slug), None)
 
@@ -56,6 +62,9 @@ class FakeUserRepository:
     async def list_active(self) -> list[User]:
         return [u for u in self.users if u.is_active]
 
+    async def list_all(self) -> list[User]:
+        return list(self.users)
+
 
 @dataclass
 class FakeSessionRepository:
@@ -69,6 +78,9 @@ class FakeSessionRepository:
 
     async def get_by_refresh_hash(self, refresh_hash: str) -> UserSession | None:
         return next((s for s in self.sessions if s.refresh_token_hash == refresh_hash), None)
+
+    async def list_active_by_user(self, user_id: UUID) -> list[UserSession]:
+        return [s for s in self.sessions if s.user_id == user_id and s.revoked_at is None]
 
 
 class FakeHasher:
@@ -155,6 +167,11 @@ class FakeConversationRepository:
 
     async def add(self, conversation: Conversation) -> None:
         self.conversations.append(conversation)
+
+    async def update(self, conversation: Conversation) -> None:
+        self.conversations = [
+            conversation if c.id == conversation.id else c for c in self.conversations
+        ]
 
     async def get_by_id(self, conversation_id: UUID) -> Conversation | None:
         return next((c for c in self.conversations if c.id == conversation_id), None)

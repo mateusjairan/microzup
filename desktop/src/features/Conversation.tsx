@@ -74,6 +74,7 @@ export function Conversation() {
   );
   const user = useApp((s) => s.user);
   const users = useApp((s) => s.users);
+  const presence = useApp((s) => s.presence);
   const typing = useApp((s) => (activeId ? s.typing[activeId] : undefined));
   const setMessages = useApp((s) => s.setMessages);
   const [draft, setDraft] = useState("");
@@ -149,7 +150,15 @@ export function Conversation() {
     );
   }
 
-  const title = conversation.kind === "channel" ? conversation.name : ownName(conversation.id) || "Conversa";
+  const peer =
+    conversation?.kind === "dm"
+      ? users.find((member) => member.id === conversation.peer_id)
+      : undefined;
+  const title =
+    conversation?.kind === "channel"
+      ? (conversation.name ?? t.nav.sectorFallback)
+      : (peer?.display_name ?? t.nav.unknownUser);
+  const peerStatus = peer ? (presence[peer.id] ?? peer.presence ?? "offline") : null;
   const typingUsers = (typing ?? []).filter((id) => id !== user?.id);
 
   let lastDay = "";
@@ -159,6 +168,9 @@ export function Conversation() {
       <header className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="truncate font-medium">{title}</div>
+          {peerStatus && (
+            <div className="text-xs text-[var(--text-3)]">{t.status[peerStatus]}</div>
+          )}
           {typingUsers.length > 0 && (
             <div className="text-xs text-[var(--text-3)]">
               {typingUsers.map((id) => ownName(id)).join(", ")} {t.conversation.typing}

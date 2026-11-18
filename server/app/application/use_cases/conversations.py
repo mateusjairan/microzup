@@ -64,6 +64,7 @@ class ConversationSummary:
     conversation: Conversation
     unread_count: int
     last_message: Message | None
+    peer_id: UUID | None = None
 
 
 class ListConversations:
@@ -84,11 +85,18 @@ class ListConversations:
             last_read_seq = await self._reads.get(conversation.id, user_id)
             unread = await self._messages.unread_count(conversation.id, last_read_seq)
             last_message = await self._messages.last(conversation.id)
+            peer_id = None
+            if conversation.kind == "dm":
+                members = await self._conversations.list_members(conversation.id)
+                peer_id = next(
+                    (member.user_id for member in members if member.user_id != user_id), None
+                )
             summaries.append(
                 ConversationSummary(
                     conversation=conversation,
                     unread_count=unread,
                     last_message=last_message,
+                    peer_id=peer_id,
                 )
             )
         return summaries

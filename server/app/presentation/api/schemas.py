@@ -28,6 +28,22 @@ class UserOut(BaseModel):
         )
 
 
+class DirectoryUserOut(UserOut):
+    presence: str
+
+    @classmethod
+    def from_user_and_presence(cls, user: User, presence: str) -> "DirectoryUserOut":
+        return cls(
+            id=user.id,
+            username=user.username,
+            display_name=user.display_name,
+            role=user.role,
+            sector_id=user.sector_id,
+            is_active=user.is_active,
+            presence=presence,
+        )
+
+
 class LoginIn(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     password: str
@@ -60,10 +76,20 @@ class CreateUserIn(BaseModel):
 class UpdateUserIn(BaseModel):
     role: str | None = None
     sector_id: UUID | None = None
+    clear_sector: bool = False
     is_active: bool | None = None
 
 
+class ResetPasswordIn(BaseModel):
+    new_password: str
+
+
 class CreateSectorIn(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class UpdateSectorIn(BaseModel):
     name: str
     description: str | None = None
 
@@ -80,6 +106,7 @@ class ConversationOut(BaseModel):
     kind: str
     name: str | None
     sector_id: UUID | None
+    peer_id: UUID | None = None
 
 
 class MessageOut(BaseModel):

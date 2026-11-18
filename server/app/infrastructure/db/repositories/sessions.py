@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,3 +25,14 @@ class SqlAlchemySessionRepository:
             select(UserSessionRow).where(UserSessionRow.refresh_token_hash == refresh_hash)
         )
         return None if row is None else session_to_domain(row)
+
+    async def list_active_by_user(self, user_id: UUID) -> list[UserSession]:
+        rows = (
+            await self._session.scalars(
+                select(UserSessionRow).where(
+                    UserSessionRow.user_id == user_id,
+                    UserSessionRow.revoked_at.is_(None),
+                )
+            )
+        ).all()
+        return [session_to_domain(row) for row in rows]

@@ -36,6 +36,7 @@ async def list_conversations(
                 kind=s.conversation.kind,
                 name=s.conversation.name,
                 sector_id=s.conversation.sector_id,
+                peer_id=s.peer_id,
             ),
             unread_count=s.unread_count,
             last_message=(MessageOut.from_message(s.last_message) if s.last_message else None),
@@ -54,6 +55,7 @@ async def open_dm(body: OpenDmIn, current: CurrentUserDep, use_case: OpenDmDep) 
         kind=conversation.kind,
         name=conversation.name,
         sector_id=conversation.sector_id,
+        peer_id=body.user_id,
     )
 
 

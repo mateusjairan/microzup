@@ -1,6 +1,6 @@
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -9,6 +9,22 @@ from app.domain.exceptions import ValidationError
 NAME_MIN = 2
 NAME_MAX = 60
 DESCRIPTION_MAX = 240
+
+
+def _clean_name(name: str) -> str:
+    clean_name = " ".join(name.split())
+    if not NAME_MIN <= len(clean_name) <= NAME_MAX:
+        raise ValidationError(f"Nome do setor deve ter entre {NAME_MIN} e {NAME_MAX} caracteres.")
+    return clean_name
+
+
+def _clean_description(description: str | None) -> str | None:
+    clean_description = description.strip() if description else None
+    if clean_description and len(clean_description) > DESCRIPTION_MAX:
+        raise ValidationError(
+            f"Descrição do setor deve ter no máximo {DESCRIPTION_MAX} caracteres."
+        )
+    return clean_description
 
 
 def slugify(value: str) -> str:
@@ -30,20 +46,20 @@ class Sector:
 
     @classmethod
     def create(cls, name: str, description: str | None, now: datetime) -> "Sector":
-        clean_name = " ".join(name.split())
-        if not NAME_MIN <= len(clean_name) <= NAME_MAX:
-            raise ValidationError(
-                f"Nome do setor deve ter entre {NAME_MIN} e {NAME_MAX} caracteres."
-            )
-        clean_description = description.strip() if description else None
-        if clean_description and len(clean_description) > DESCRIPTION_MAX:
-            raise ValidationError(
-                f"Descrição do setor deve ter no máximo {DESCRIPTION_MAX} caracteres."
-            )
+        clean_name = _clean_name(name)
         return cls(
             id=uuid4(),
             name=clean_name,
             slug=slugify(clean_name),
-            description=clean_description,
+            description=_clean_description(description),
             created_at=now,
+        )
+
+    def with_details(self, name: str, description: str | None) -> "Sector":
+        clean_name = _clean_name(name)
+        return replace(
+            self,
+            name=clean_name,
+            slug=slugify(clean_name),
+            description=_clean_description(description),
         )

@@ -20,7 +20,9 @@ from app.application.use_cases.messages import (
     SendMessage,
 )
 from app.application.use_cases.refresh import Refresh
+from app.application.use_cases.reset_password import ResetPassword
 from app.application.use_cases.search_messages import SearchMessages
+from app.application.use_cases.update_sector import UpdateSector
 from app.application.use_cases.update_user import UpdateUser
 from app.application.use_cases.upload_file import UploadFile
 from app.config import Settings
@@ -152,6 +154,33 @@ def get_update_user(session: SessionDep) -> UpdateUser:
 
 
 UpdateUserDep = Annotated[UpdateUser, Depends(get_update_user)]
+
+
+def get_update_sector(session: SessionDep) -> UpdateSector:
+    return UpdateSector(
+        sectors=SqlAlchemySectorRepository(session),
+        conversations=SqlAlchemyConversationRepository(session),
+        audit=SqlAlchemyAuditSink(session),
+        uow=SqlAlchemyUnitOfWork(session),
+        clock=SystemClock(),
+    )
+
+
+UpdateSectorDep = Annotated[UpdateSector, Depends(get_update_sector)]
+
+
+def get_reset_password(session: SessionDep) -> ResetPassword:
+    return ResetPassword(
+        users=SqlAlchemyUserRepository(session),
+        sessions=SqlAlchemySessionRepository(session),
+        hasher=Argon2Hasher(),
+        audit=SqlAlchemyAuditSink(session),
+        uow=SqlAlchemyUnitOfWork(session),
+        clock=SystemClock(),
+    )
+
+
+ResetPasswordDep = Annotated[ResetPassword, Depends(get_reset_password)]
 
 
 async def get_current_user(

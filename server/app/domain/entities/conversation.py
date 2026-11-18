@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Literal
 from uuid import UUID, uuid4
@@ -42,6 +42,9 @@ class Conversation:
             created_at=now,
             archived_at=None,
         )
+
+    def with_name(self, name: str) -> "Conversation":
+        return replace(self, name=name)
 
     @classmethod
     def create_dm(cls, user_a: UUID, user_b: UUID, now: datetime) -> "Conversation":

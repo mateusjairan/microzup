@@ -36,8 +36,9 @@ data/
 # Build / empacotamento
 build/
 dist/
-*.spec
 release/
+!desktop/build/
+!server/*.spec
 
 # Logs e temporários
 *.log

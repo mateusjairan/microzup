@@ -94,3 +94,6 @@ class User:
 
     def with_last_seen(self, now: datetime) -> "User":
         return replace(self, last_seen_at=now)
+
+    def with_password_hash(self, password_hash: str, now: datetime) -> "User":
+        return replace(self, password_hash=password_hash, updated_at=now)

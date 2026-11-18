@@ -26,6 +26,10 @@ class SqlAlchemyConversationRepository:
         self._session.add(conversation_to_row(conversation))
         await self._session.flush()
 
+    async def update(self, conversation: Conversation) -> None:
+        await self._session.merge(conversation_to_row(conversation))
+        await self._session.flush()
+
     async def get_by_id(self, conversation_id: UUID) -> Conversation | None:
         row = await self._session.get(ConversationRow, conversation_id)
         return None if row is None else conversation_to_domain(row)

@@ -1,41 +1,61 @@
-import { useEffect, useState } from "react";
-import { LogOut } from "lucide-react";
-import { api } from "./lib/api";
-import { clearTokens } from "./lib/bridge";
+import { useEffect, useRef, useState } from "react";
+import { LogOut, Shield } from "lucide-react";
+import { api, clear, getRefreshToken, initAuth } from "./lib/api";
 import { WsClient } from "./lib/ws";
 import { useApp } from "./store";
+import { AdminPanel } from "./features/AdminPanel";
 import { Login } from "./features/Login";
 import { Sidebar } from "./features/Sidebar";
 import { Conversation as ConversationPane } from "./features/Conversation";
 import { SearchPalette } from "./features/Search";
-import type { ConversationSummary, Message, User } from "./types";
+import { t } from "./i18n/pt-BR";
+import type { ConversationSummary, Message, PresenceStatus, User } from "./types";
+
+function parsePresence(value: unknown): PresenceStatus | null {
+  switch (value) {
+    case "available":
+    case "busy":
+    case "away":
+    case "dnd":
+    case "invisible":
+    case "offline":
+      return value;
+    case "online":
+      return "available";
+    default:
+      return null;
+  }
+}
 
 export function App() {
   const user = useApp((s) => s.user);
   const [booted, setBooted] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
-      const { initAuth } = await import("./lib/api");
       const hasToken = await initAuth();
-      if (hasToken && !user) {
+      if (hasToken) {
         try {
           const me = await api.get<User>("/me");
-          useApp.getState().setUser(me);
+          if (!cancelled) useApp.getState().setUser(me);
         } catch {
-          await clearTokens();
+          await clear();
         }
       }
-      setBooted(true);
+      if (!cancelled) setBooted(true);
     })();
-  }, [user]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (!booted) return null;
   return user ? <Shell /> : <Login />;
 }
 
 function Shell() {
-  const setUser = useApp((s) => s.setUser);
+  const user = useApp((s) => s.user);
   const reset = useApp((s) => s.reset);
   const setConversations = useApp((s) => s.setConversations);
   const setUsers = useApp((s) => s.setUsers);
@@ -48,15 +68,22 @@ function Shell() {
   const activeId = useApp((s) => s.activeConversationId);
   const markRead = useApp((s) => s.markRead);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const activeIdRef = useRef(activeId);
+
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
 
   useEffect(() => {
     const ws = new WsClient();
+    ws.onStatus((online) => setConnected(online));
     ws.onEvent((event) => {
       switch (event.type) {
         case "message.created": {
           const message = event.payload as unknown as Message;
           addMessage(message);
-          if (message.conversation_id === activeId) {
+          if (message.conversation_id === activeIdRef.current) {
             void api.post(`/conversations/${message.conversation_id}/read`, {
               last_read_seq: message.seq,
             });
@@ -73,8 +100,20 @@ function Shell() {
           break;
         }
         case "presence.changed": {
-          const payload = event.payload as { user_id: string; status: string };
-          setPresence(payload.user_id, payload.status as never);
+          const payload = event.payload as { user_id: string; status: unknown };
+          const status = parsePresence(payload.status);
+          if (status) setPresence(payload.user_id, status);
+          break;
+        }
+        case "hello": {
+          const payload = event.payload as { presence?: Record<string, unknown> };
+          if (payload.presence) {
+            for (const [userId, value] of Object.entries(payload.presence)) {
+              const status = parsePresence(value);
+              if (status) setPresence(userId, status);
+            }
+          }
+          setConnected(true);
           break;
         }
         case "typing": {
@@ -87,26 +126,35 @@ function Shell() {
           break;
         }
       }
-      if (event.type === "hello") setConnected(true);
     });
     void ws.connect();
     return () => ws.close();
-  }, [activeId, addMessage, updateMessage, removeMessage, setPresence, setTyping, setConnected, markRead]);
+  }, [
+    addMessage,
+    updateMessage,
+    removeMessage,
+    setPresence,
+    setTyping,
+    setConnected,
+    markRead,
+  ]);
 
   useEffect(() => {
     void (async () => {
       try {
-        const [conversations, users] = await Promise.all([
-          api.get<ConversationSummary[]>("/conversations"),
-          api.get<User[]>("/users"),
-        ]);
+        const conversations = await api.get<ConversationSummary[]>("/conversations");
         setConversations(conversations);
+      } catch {
+        /* mantém o estado atual */
+      }
+      try {
+        const users = await api.get<User[]>("/users");
         setUsers(users);
       } catch {
-        setConnected(false);
+        /* mantém o estado atual */
       }
     })();
-  }, [setConversations, setUsers, setConnected]);
+  }, [setConversations, setUsers]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -120,9 +168,15 @@ function Shell() {
   }, []);
 
   async function logout() {
-    await clearTokens();
+    const refresh = getRefreshToken();
+    await clear();
+    setAdminOpen(false);
     reset();
-    setUser(null);
+    if (refresh) {
+      void api.post("/auth/logout", { refresh_token: refresh }).catch(() => {
+        /* sessão já pode estar expirada */
+      });
+    }
   }
 
   return (
@@ -133,11 +187,19 @@ function Shell() {
           Microzup
         </div>
         <div className="titlebar-no-drag flex items-center gap-1">
+          {user?.role === "admin" && (
+            <button
+              onClick={() => setAdminOpen(true)}
+              className="flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-[var(--text-2)] hover:bg-[var(--bg-hover)]"
+            >
+              <Shield size={14} /> {t.admin.title}
+            </button>
+          )}
           <button
             onClick={() => void logout()}
             className="flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-[var(--text-2)] hover:bg-[var(--bg-hover)]"
           >
-            <LogOut size={14} /> Sair
+            <LogOut size={14} /> {t.nav.logout}
           </button>
         </div>
       </header>
@@ -146,6 +208,9 @@ function Shell() {
         <ConversationPane />
       </div>
       <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
+      {adminOpen && user?.role === "admin" && (
+        <AdminPanel onClose={() => setAdminOpen(false)} />
+      )}
     </div>
   );
 }

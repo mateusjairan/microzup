@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { api } from "../lib/api";
 import { setServerUrl, getServerUrl } from "../lib/bridge";
@@ -18,9 +18,9 @@ export function Login() {
   const [connectionStatus, setConnectionStatus] = useState<string | null>(null);
   const setUser = useApp((s) => s.setUser);
 
-  useState(() => {
+  useEffect(() => {
     void getServerUrl().then((url) => setServer(url));
-  });
+  }, []);
 
   async function testConnection() {
     setTesting(true);

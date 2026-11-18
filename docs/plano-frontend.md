@@ -58,7 +58,8 @@ Microzup
    │  ├─ Busca rápida (Ctrl+K)
    │  ├─ Setores (canais) — colapsável, com não-lidas
    │  ├─ Conversas diretas — ordenadas por atividade
-   │  └─ Rodapé: "Nova conversa", versão, estado da conexão
+   │  ├─ Equipe — colegas ativos com presença; clique abre a DM
+   │  └─ Rodapé: estado da conexão
    ├─ Conversa (flex)
    │  ├─ Cabeçalho: nome, participantes online, silenciar, detalhes
    │  ├─ Lista de mensagens (virtualizada)
@@ -142,7 +143,7 @@ O campo **Servidor** é obrigatório no desktop (não há descoberta automática
 | **Detalhes** | membros, arquivos | lista vazia, carregando, arquivo indisponível |
 | **Visualizador de imagem** | lightbox com download | carregando, falha |
 | **Configurações** | perfil, notificações, aparência, conexão, sobre | — |
-| **Admin (web)** | usuários, setores, auditoria, uso | tabela vazia, erro, confirmação destrutiva |
+| **Admin (desktop)** | usuários, setores, auditoria, uso | tabela vazia, erro, confirmação destrutiva |
 | **Sessão bloqueada** | overlay após 15 min de inatividade (config) | reautenticar sem perder rascunho |
 
 ---
@@ -386,7 +387,7 @@ desktop/src/
 │  ├─ files/       # upload, cards, lightbox
 │  ├─ search/
 │  ├─ settings/
-│  └─ admin/       # rotas web-only
+│  └─ admin/       # painel administrativo (role admin)
 ├─ components/
 │  ├─ ui/          # Avatar, Button, Dialog, Toast…
 │  └─ chat/        # ContactRow, MessageList, Composer…

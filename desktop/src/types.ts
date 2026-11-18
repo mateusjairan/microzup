@@ -8,6 +8,33 @@ export interface User {
   role: Role;
   sector_id: string | null;
   is_active: boolean;
+  presence?: PresenceStatus;
+}
+
+export interface Sector {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+}
+
+export interface AuditEntry {
+  id: number;
+  actor_id: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  metadata: Record<string, unknown>;
+  ip: string | null;
+  created_at: string;
+}
+
+export interface AdminStats {
+  users: number;
+  sectors: number;
+  conversations: number;
+  messages: number;
+  attachments: number;
 }
 
 export interface Conversation {
@@ -15,6 +42,7 @@ export interface Conversation {
   kind: "channel" | "dm";
   name: string | null;
   sector_id: string | null;
+  peer_id: string | null;
 }
 
 export interface Message {

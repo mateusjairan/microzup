@@ -7,6 +7,8 @@ from sqlalchemy import func, select
 
 from app.application.use_cases.create_sector import CreateSectorCommand
 from app.application.use_cases.create_user import CreateUserCommand
+from app.application.use_cases.reset_password import ResetPasswordCommand
+from app.application.use_cases.update_sector import UpdateSectorCommand
 from app.application.use_cases.update_user import UpdateUserCommand
 from app.infrastructure.db.models import (
     AttachmentRow,
@@ -22,8 +24,10 @@ from app.presentation.api.schemas import (
     AuditOut,
     CreateSectorIn,
     CreateUserIn,
+    ResetPasswordIn,
     SectorOut,
     StatsOut,
+    UpdateSectorIn,
     UpdateUserIn,
     UserOut,
 )
@@ -31,7 +35,9 @@ from app.presentation.deps import (
     AdminDep,
     CreateSectorDep,
     CreateUserDep,
+    ResetPasswordDep,
     SessionDep,
+    UpdateSectorDep,
     UpdateUserDep,
 )
 
@@ -50,8 +56,11 @@ def _ip(request: Request) -> str | None:
 
 
 @router.get("/users", response_model=list[UserOut])
-async def list_users(_: AdminDep, session: SessionDep) -> list[UserOut]:
-    users = await SqlAlchemyUserRepository(session).list_active()
+async def list_users(
+    _: AdminDep, session: SessionDep, include_inactive: bool = False
+) -> list[UserOut]:
+    repo = SqlAlchemyUserRepository(session)
+    users = await repo.list_all() if include_inactive else await repo.list_active()
     return [UserOut.from_user(user) for user in users]
 
 
@@ -90,7 +99,27 @@ async def update_user(
             actor_id=admin.id,
             role=body.role,
             sector_id=body.sector_id,
+            clear_sector=body.clear_sector,
             is_active=body.is_active,
+            ip=_ip(request),
+        )
+    )
+    return UserOut.from_user(user)
+
+
+@router.post("/users/{user_id}/password", response_model=UserOut, status_code=status.HTTP_200_OK)
+async def reset_user_password(
+    user_id: UUID,
+    body: ResetPasswordIn,
+    request: Request,
+    admin: AdminDep,
+    use_case: ResetPasswordDep,
+) -> UserOut:
+    user = await use_case.execute(
+        ResetPasswordCommand(
+            target_id=user_id,
+            new_password=body.new_password,
+            actor_id=admin.id,
             ip=_ip(request),
         )
     )
@@ -115,13 +144,43 @@ async def create_sector(body: CreateSectorIn, use_case: CreateSectorDep) -> Sect
     )
 
 
+@router.patch("/sectors/{sector_id}", response_model=SectorOut)
+async def update_sector(
+    sector_id: UUID,
+    body: UpdateSectorIn,
+    request: Request,
+    admin: AdminDep,
+    use_case: UpdateSectorDep,
+) -> SectorOut:
+    sector = await use_case.execute(
+        UpdateSectorCommand(
+            target_id=sector_id,
+            name=body.name,
+            description=body.description,
+            actor_id=admin.id,
+            ip=_ip(request),
+        )
+    )
+    return SectorOut(
+        id=sector.id, name=sector.name, slug=sector.slug, description=sector.description
+    )
+
+
 @router.get("/audit", response_model=list[AuditOut])
 async def list_audit(
-    _: AdminDep, session: SessionDep, limit: int = Query(default=100, ge=1, le=500)
+    _: AdminDep,
+    session: SessionDep,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    action: str | None = None,
+    actor_id: UUID | None = None,
 ) -> list[AuditOut]:
-    rows = (
-        await session.scalars(select(AuditLogRow).order_by(AuditLogRow.id.desc()).limit(limit))
-    ).all()
+    statement = select(AuditLogRow).order_by(AuditLogRow.id.desc())
+    if action:
+        statement = statement.where(AuditLogRow.action == action)
+    if actor_id is not None:
+        statement = statement.where(AuditLogRow.actor_id == actor_id)
+    rows = (await session.scalars(statement.offset(offset).limit(limit))).all()
     return [
         AuditOut(
             id=row.id,

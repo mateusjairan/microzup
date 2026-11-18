@@ -35,3 +35,7 @@ class SqlAlchemyUserRepository:
             )
         ).all()
         return [user_to_domain(row) for row in rows]
+
+    async def list_all(self) -> list[User]:
+        rows = (await self._session.scalars(select(UserRow).order_by(UserRow.display_name))).all()
+        return [user_to_domain(row) for row in rows]

@@ -52,7 +52,7 @@ docker compose -f server/docker-compose.yml up -d
 # Backend (a partir de server/)
 uv sync
 uv run alembic upgrade head
-uv run uvicorn app.main:app --reload --port 8666
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8666
 
 # Bootstrap do primeiro admin (senha via getpass, nunca em argumento)
 uv run python -m app.cli create-admin --username admin

@@ -43,7 +43,15 @@ docker compose -f server/docker-compose.yml up -d
 cd server
 uv sync
 uv run alembic upgrade head
-uv run uvicorn app.main:app --reload --port 8666
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8666
+```
+
+Com `--host 0.0.0.0` a API aceita conexões de outras máquinas da LAN em `http://<IP-do-servidor>:8666`. Libere a porta TCP `8666` no firewall do Windows (perfil de rede em uso) e informe esse endereço no campo **Servidor** do cliente desktop.
+
+Em um PowerShell **como administrador**, na raiz do projeto:
+
+```powershell
+.\scripts\open-firewall.ps1
 ```
 
 O primeiro administrador é criado por CLI, com senha lida de forma interativa:
@@ -60,6 +68,8 @@ npm ci
 npm run dev        # Vite + Electron (dev)
 npm run dist       # gera o instalador NSIS em desktop/release
 ```
+
+O painel de administração fica no próprio cliente desktop, visível apenas para usuários com papel `admin`: usuários, setores, auditoria e estatísticas.
 
 ### Backup
 

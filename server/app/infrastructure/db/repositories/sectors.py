@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +15,14 @@ class SqlAlchemySectorRepository:
     async def add(self, sector: Sector) -> None:
         self._session.add(sector_to_row(sector))
         await self._session.flush()
+
+    async def update(self, sector: Sector) -> None:
+        await self._session.merge(sector_to_row(sector))
+        await self._session.flush()
+
+    async def get_by_id(self, sector_id: UUID) -> Sector | None:
+        row = await self._session.get(SectorRow, sector_id)
+        return None if row is None else sector_to_domain(row)
 
     async def get_by_slug(self, slug: str) -> Sector | None:
         row = await self._session.scalar(select(SectorRow).where(SectorRow.slug == slug))

@@ -9,7 +9,7 @@
 
 | Tema | Decisão |
 |---|---|
-| Cliente | App desktop instalável (Windows), com fallback web para admin |
+| Cliente | App desktop instalável (Windows), com painel de administração no próprio cliente |
 | Backend | Python 3.13 + FastAPI |
 | Banco de dados | **PostgreSQL 17** |
 | Autenticação | Contas locais (usuário + senha), criadas por admin |
@@ -19,7 +19,7 @@
 
 ### Por que Electron (e não Tauri/PyWebView)
 
-- **Electron**: toolchain maduro no Windows, mesmo código React roda no navegador (fallback para admin/teste), notificações nativas, `electron-builder` gera instalador NSIS com assinatura e atalho. Custo: instalador ~120 MB.
+- **Electron**: toolchain maduro no Windows, mesmo código React roda no navegador (útil para desenvolvimento/teste), notificações nativas, `electron-builder` gera instalador NSIS com assinatura e atalho. Custo: instalador ~120 MB.
 - **Tauri**: binário ~10 MB, mas exige Rust no build e WebView2 nas estações (quase sempre presente, porém mais um pré-requisito a validar na TI).
 - **PyWebView + PyInstaller**: mantém um único runtime (Python), porém notificações, bandeja, auto-atualização e empacotamento são bem menos previsíveis.
 
@@ -453,10 +453,10 @@ ALTER DEFAULT PRIVILEGES FOR ROLE microzup_owner IN SCHEMA public
 ### Dados
 | Método | Rota | Descrição |
 |---|---|---|
-| GET | `/users` | diretório (id, nome, setor, presença) |
+| GET | `/users` | diretório ativo (id, nome, setor, presença) |
 | GET | `/sectors` | lista de setores |
-| GET | `/conversations` | canais + DMs do usuário, com `last_message` e `unread_count` |
-| POST | `/conversations/dm` | `{user_id}` → abre/reaproveita DM |
+| GET | `/conversations` | canais + DMs do usuário, com `last_message`, `unread_count` e `peer_id` nas DMs |
+| POST | `/conversations/dm` | `{user_id}` → abre/reaproveita DM e devolve `peer_id` |
 | GET | `/conversations/{id}/messages` | `?before_seq=&after_seq=&limit=50` |
 | POST | `/conversations/{id}/read` | `{last_read_seq}` → marca lido |
 | GET | `/search` | `?q=&conversation_id=` (full-text) |
@@ -472,7 +472,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE microzup_owner IN SCHEMA public
 | GET | `/files/{id}/thumbnail` | prévia de imagem (worker) |
 
 ### Admin
-`POST/PATCH /admin/users`, `POST/PATCH /admin/sectors`, `GET /admin/audit`, `GET /admin/stats`.
+`GET /admin/users` (com `include_inactive`), `POST/PATCH /admin/users`, `POST /admin/users/{id}/password`, `GET/POST/PATCH /admin/sectors`, `GET /admin/audit` (com filtros por ação/ator), `GET /admin/stats`.
 
 ### WebSocket `GET /ws?ticket=<ticket>`
 
@@ -486,12 +486,13 @@ Envelope único, para evoluir sem quebrar clientes antigos:
 
 | Evento | Direção | Payload |
 |---|---|---|
-| `hello` | S→C | versão do servidor, usuário, inscrições |
+| `hello` | S→C | versão do servidor, usuário, inscrições e snapshot de presença |
 | `message.created` | S→C | mensagem completa + `seq` |
 | `message.updated` / `message.deleted` | S→C | id + patch |
 | `attachment.ready` | S→C | id, thumbnail disponível |
 | `typing` | C→S→C | `{conversation_id, is_typing}` |
-| `presence.changed` | S→C | `{user_id, status}` |
+| `presence.changed` | S→C | `{user_id, status}` (`available`, `busy`, `away`, `dnd`, `invisible` → `offline`, `offline`) |
+| `presence.set` | C→S→C | `{status}`; o servidor valida e reemite `presence.changed` |
 | `read.updated` | S↔C | `{conversation_id, user_id, last_read_seq}` |
 | `ping` / `pong` | S↔C | keepalive 25 s |
 
@@ -514,7 +515,8 @@ Robustez: reconexão com backoff exponencial + **catch-up por cursor** (`after_s
 
 **Offline → online**
 1. Cliente abre, faz `refresh`, busca `GET /conversations` (contadores) e `?after_seq=` por conversa ativa.
-2. Abre o WS e substitui o estado; nada de "perder mensagem" por socket caído.
+2. Abre o WS; o `hello` traz o snapshot de presença e substitui o estado. Nada de "perder mensagem" por socket caído.
+3. `GET /users` mantém o diretório da equipe (quem está online, setor e papel) para iniciar DMs.
 
 ---
 
@@ -524,7 +526,7 @@ Robustez: reconexão com backoff exponencial + **catch-up por cursor** (`after_s
 - Tokens: access JWT curto (15 min) + refresh opaco (hash no banco, rotativo); `Authorization: Bearer`.
 - Autorização **sempre** revalidada no servidor por conversa — nunca confiar no cliente.
 - Uploads: nome sanitizado, MIME sniffing, extensões bloqueadas, sem execução no diretório de dados.
-- CORS restrito a `file://`/origem do renderer e à origem web de admin.
+- CORS restrito à origem do renderer (`null` no Electron instalado, `http://localhost:5173` em dev) e sem credenciais em cookie.
 - Rate limit básico (login, upload, envio) em memória — suficiente para 1 processo.
 - Logs estruturados em JSON, rotação diária, sem corpo de mensagem em log.
 - **TLS**: MVP roda HTTP puro na LAN (decisão consciente e documentada). Fase 2: certificado interno + pinning no cliente.
@@ -609,7 +611,7 @@ Regra: variável nova entra em `.env.example`, nesta tabela e em `config.py` na 
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| TI não permite instalar `.exe` nas estações | Alto | Validar cedo; fallback web já pronto no mesmo código |
+| TI não permite instalar `.exe` nas estações | Alto | Validar cedo; o renderer React pode ser servido no navegador como fallback (não implementado) |
 | Antivírus bloqueia executável não assinado | Alto | Assinar com certificado interno ou liberar por GPO em M0 |
 | Postgres indisponível derruba o chat | Alto | Serviço com restart automático, monitoramento de health, backup validado |
 | Falta de DBA para operar Postgres | Médio | `docker-compose` versionado + `operacao.md`; rotina de backup automatizada |

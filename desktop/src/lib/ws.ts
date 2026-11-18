@@ -9,10 +9,12 @@ export interface WsEvent {
 }
 
 type Handler = (event: WsEvent) => void;
+type StatusHandler = (online: boolean) => void;
 
 export class WsClient {
   private ws: WebSocket | null = null;
   private handlers: Handler[] = [];
+  private statusHandlers: StatusHandler[] = [];
   private closed = false;
   private retries = 0;
   private reconnectTimer: number | null = null;
@@ -24,25 +26,43 @@ export class WsClient {
     };
   }
 
+  onStatus(handler: StatusHandler): () => void {
+    this.statusHandlers.push(handler);
+    return () => {
+      this.statusHandlers = this.statusHandlers.filter((h) => h !== handler);
+    };
+  }
+
   async connect(): Promise<void> {
-    this.closed = false;
+    if (this.closed) return;
     try {
       const { ticket } = await api.post<{ ticket: string }>("/ws/ticket");
+      if (this.closed) return;
       const base = await getServerUrl();
+      if (this.closed) return;
       const wsBase = base.replace(/^http/, "ws");
       this.ws = new WebSocket(`${wsBase}/ws?ticket=${ticket}`);
 
+      this.ws.onopen = () => {
+        this.retries = 0;
+        this.emitStatus(true);
+      };
       this.ws.onmessage = (event) => {
         const parsed = JSON.parse(event.data as string) as WsEvent;
         this.handlers.forEach((handler) => handler(parsed));
       };
       this.ws.onclose = () => {
+        this.emitStatus(false);
         if (!this.closed) this.scheduleReconnect();
       };
       this.ws.onerror = () => this.ws?.close();
     } catch {
-      this.scheduleReconnect();
+      if (!this.closed) this.scheduleReconnect();
     }
+  }
+
+  private emitStatus(online: boolean): void {
+    this.statusHandlers.forEach((handler) => handler(online));
   }
 
   private scheduleReconnect(): void {
@@ -63,6 +83,11 @@ export class WsClient {
 
   close(): void {
     this.closed = true;
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.ws?.close();
+    this.ws = null;
   }
 }
