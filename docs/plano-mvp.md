@@ -559,11 +559,13 @@ Contrato em `server/.env.example`; segredos reais nunca entram no Git.
 | `HOST` / `PORT` | `0.0.0.0` / `8666` | bind do Uvicorn |
 | `DATABASE_URL` | — | conexão como `microzup_app` |
 | `MIGRATION_DATABASE_URL` | — | conexão como `microzup_owner`, usada só pelo Alembic |
+| `STATEMENT_TIMEOUT_MS` | `15000` | `statement_timeout` por conexão no engine |
+| `IDLE_IN_TRANSACTION_SESSION_TIMEOUT_MS` | `30000` | `idle_in_transaction_session_timeout` por conexão |
 | `JWT_SECRET` | — | ≥ 32 bytes aleatórios; ausência impede o boot |
 | `ACCESS_TOKEN_TTL_MINUTES` | `15` | validade do access token |
 | `REFRESH_TOKEN_TTL_DAYS` | `30` | validade do refresh |
 | `WS_TICKET_TTL_SECONDS` | `30` | validade do ticket de WebSocket |
-| `CORS_ORIGINS` | `http://localhost:5173` | origens permitidas, separadas por vírgula |
+| `CORS_ORIGINS` | `http://localhost:5173,null` | origens permitidas, separadas por vírgula (`null` = renderer via `file://` no instalado) |
 | `STORAGE_DIR` | `./data` | raiz de arquivos e temporários |
 | `MAX_UPLOAD_MB` | `100` | limite por arquivo |
 | `MAX_ATTACHMENTS_PER_MESSAGE` | `5` | limite por mensagem |
@@ -571,8 +573,15 @@ Contrato em `server/.env.example`; segredos reais nunca entram no Git.
 | `MESSAGE_MAX_CHARS` | `8000` | limite de corpo |
 | `MESSAGE_RETENTION_DAYS` | `0` | `0` = desligado |
 | `FILE_RETENTION_DAYS` | `0` | `0` = desligado |
-| `LOGIN_MAX_ATTEMPTS` | `5` | bloqueio progressivo |
+| `RETENTION_INTERVAL_SECONDS` | `3600` | intervalo da task de retenção no lifespan (`0` = desliga a task; a CLI `retention-run` segue disponível) |
+| `LOGIN_MAX_ATTEMPTS` | `5` | bloqueio progressivo por IP+usuário |
+| `LOGIN_LOCKOUT_SECONDS` | `300` | liberação do bloqueio progressivo (dobra a cada ciclo, até 1 h) |
+| `RATE_LIMIT_LOGIN_PER_MINUTE` | `10` | rate limit em memória: logins/min |
+| `RATE_LIMIT_UPLOAD_PER_MINUTE` | `20` | rate limit em memória: uploads/min |
+| `RATE_LIMIT_MESSAGE_PER_MINUTE` | `30` | rate limit em memória: mensagens/min |
 | `LOG_LEVEL` | `INFO` | nível de log |
+| `LOG_DIR` | `./data/logs` | diretório do arquivo de log JSON com rotação diária |
+| `LOG_RETENTION_DAYS` | `14` | dias de retenção dos arquivos de log rotacionados |
 
 Regra: variável nova entra em `.env.example`, nesta tabela e em `config.py` na mesma alteração.
 

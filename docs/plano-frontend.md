@@ -164,18 +164,23 @@ Tokens em CSS custom properties (`styles/tokens.css`), consumidos pelo Tailwind.
 | `--border` | `#E3E6EA` | divisores |
 | `--text` | `#14181F` | texto principal |
 | `--text-2` | `#5A6472` | secundário |
-| `--text-3` | `#8A94A3` | meta, timestamps |
+| `--text-3` | `#5F6B79` | meta, timestamps |
 | `--accent` | `#2563EB` | ações, envio, links |
 | `--accent-hover` | `#1D4ED8` | hover |
 | `--accent-soft` | `#E8F0FE` | bolha própria |
 | `--danger` | `#DC2626` | erro, ocupado |
 | `--success` | `#16A34A` | disponível |
+| `--success-text` | `#166534` | texto de estado positivo (ex.: chip "Ativo" do admin) |
 | `--warning` | `#D97706` | ausente |
 | `--dnd` | `#7C3AED` | não perturbe |
 
+> **Nota de acessibilidade:** `--text-3` do tema claro foi ajustado de `#8A94A3` para `#5F6B79` — o valor original rendia ~3,0:1, abaixo do mínimo de 4,5:1 exigido pelo §10 (WCAG 2.1 AA). O novo valor mantém a família cinza-azulada da intenção original ("meta, timestamps") e garante ≥ 4,7:1 sobre **todos** os fundos claros onde o token assenta (`--bg-app` `#F5F6F8`, `--bg-surface` `#FFF`, `--bg-sidebar` `#FBFBFC`, `--bg-hover` `#EEF1F5` e a linha selecionada `--accent-soft` `#E8F0FE` — o pior caso).
+
+> **Nota de acessibilidade (texto de estado):** `--success` `#16A34A` atende à regra de 3:1 apenas como cor **não-texto** (dot de presença); como cor de texto falha em qualquer fundo claro (~3,3:1 sobre branco). Para texto verde (chip "Ativo" do admin) usa-se o token dedicado `--success-text`: `#166534` no tema claro (≥ 6,2:1) e `#4ADE80` no escuro.
+
 ### Cores — dark
 
-`--bg-app #0F1319` · `--bg-surface #161B23` · `--bg-sidebar #12171E` · `--bg-hover #1E2530` · `--border #242C38` · `--text #E6EAF0` · `--text-2 #A2ADBD` · `--text-3 #6E7A8C` · `--accent #4F8CFF` · `--accent-soft #1B2A45` · presença com os mesmos matizes, +8% de luminosidade.
+`--bg-app #0F1319` · `--bg-surface #161B23` · `--bg-sidebar #12171E` · `--bg-hover #1E2530` · `--border #242C38` · `--text #E6EAF0` · `--text-2 #A2ADBD` · `--text-3 #6E7A8C` · `--accent #4F8CFF` · `--accent-soft #1B2A45` · `--success-text #4ADE80` (texto de estado positivo; o `--success` do escuro segue reservado a dot/presença) · presença com os mesmos matizes, +8% de luminosidade.
 
 ### Presença (sempre dot + texto/aria, nunca só cor)
 
