@@ -13,6 +13,11 @@ htmlcov/
 
 # Node / Electron
 node_modules/
+.npm-cache/
+desktop/openapi.json
+desktop/storybook-static/
+desktop/.e2e-*
+desktop/e2e/.tmp/
 desktop/dist/
 desktop/release/
 desktop/out/
