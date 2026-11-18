@@ -1,0 +1,10 @@
+{
+  "name": "microzup-gen-api",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Sandbox de ferramentas do gen:api — openapi-typescript exige a API JS do TypeScript 5 (o projeto usa o compilador nativo TS 7, que não a expõe).",
+  "dependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "^5.9.3"
+  }
+}
