@@ -68,6 +68,11 @@ O banco de dev NÃO é limpo por esta suíte (sem DELETEs; fixtures ficam).
 
 ## Peculiaridades de fluxo
 
+- **`message-flags` roda sem Electron:** valida em Node puro a lógica de divisor
+  de dia / agrupamento por autor (`src/features/messages/itemFlags.ts`) — é a
+  spec mais rápida da suíte e trava a regressão do "Hoje" repetido entre
+  mensagens do mesmo dia; `day-divider` cobre o mesmo requisito na UI real
+  (exatamente um divisor por dia).
 - **Resiliência:** as specs `send-retry` e `reconnect` MATAM o backend no meio
   do teste (taskkill da árvore do PID gravado em `e2e/.tmp/backend.pid`) e o
   religam; o globalTeardown mata o que estiver no ar e apaga os temporários

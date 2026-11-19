@@ -371,6 +371,67 @@ instalação dos usuários; a assinatura com certificado interno (ou liberação
 GPO) é tratada antes da fase 2. **Não** rode `npm run dist` em máquina com
 certificado esperando um instalador "limpo" sem configurar a assinatura.
 
+### 4.2 Instalador travado ("Instalando" em ~63%) e instalação manual
+
+**Sintoma:** o assistente abre, a pasta é aceita, mas ao clicar em **Instalar** a
+barra congela (observado em ~63%) e nada é escrito no destino; às vezes o
+processo desaparece sem instalar e sem mensagem de erro.
+
+**O que já foi descartado** (medido na estação, 2026-11-19):
+
+| Hipótese | Medida |
+|---|---|
+| Instalador corrompido | `7z t` → *Everything is Ok* (payload completo) |
+| Payload truncado | `app-64.7z` descompacta 409 MB em ~2 s |
+| Disco cheio | o próprio assistente mostra 91,3 GB livres antes de instalar |
+| Template do electron-builder divergente | idêntico ao upstream (26.18.0) |
+
+A causa raiz **não foi fechada**: dois caminhos de extração diferentes (payload
+7z e payload zip) travam no mesmo ponto, com CPU do processo em 0 s e as
+threads em espera de mensagem — o que aponta para o ambiente da estação, não
+para o artefato.
+
+**Antes de reinstalar, elimine as duas causas de arquivo em uso:**
+
+1. **Nenhuma instância aberta.** O app pode estar minimizado na bandeja
+   (`closeToTray`): encerre pelo Gerenciador de Tarefas (processo `Microzup.exe`,
+   com os filhos `--type=renderer`/`--type=gpu-process`).
+2. **Versão anterior desinstalada.** O instalador executa o desinstalador
+   anterior antes de extrair; com arquivos em uso ele repete a operação e o
+   assistente fica parado.
+   ```powershell
+   & "$env:LOCALAPPDATA\Programs\Microzup\Uninstall Microzup.exe"
+   ```
+
+**Instalação manual (sem NSIS)** — copia o payload já empacotado e recria os
+atalhos. Funciona sempre e não depende de elevação:
+
+```powershell
+# com o app FECHADO
+$dst = "$env:LOCALAPPDATA\Programs\Microzup"
+Copy-Item .\desktop\release\win-unpacked\* $dst -Recurse -Force
+
+$exe = Join-Path $dst "Microzup.exe"
+$ws = New-Object -ComObject WScript.Shell
+$atalhos = @(
+  (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Microzup.lnk'),
+  (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Microzup.lnk')
+)
+foreach ($lnk in $atalhos) {
+  $s = $ws.CreateShortcut($lnk); $s.TargetPath = $exe; $s.WorkingDirectory = $dst; $s.Save()
+}
+```
+
+Regras da instalação manual:
+
+- copie **`Microzup.exe` e `resources\app.asar` juntos** — o electron-builder
+  embute o hash de integridade do asar no executável; trocar só um dos dois faz
+  a validação falhar no boot;
+- ela **não** cria entrada em *Aplicativos e recursos*; o próximo `Setup` trata
+  a pasta como instalação limpa (sem desinstalador anterior para rodar);
+- para atualizar depois de um `npm run build`, repita a cópia (é o mesmo
+  payload que o instalador distribuiria).
+
 ---
 
 ## 5. Logs e rotação
@@ -535,6 +596,44 @@ psycopg async não funciona com Proactor no Windows.
 **Em dev não afeta:** com `--reload` o próprio uvicorn usa o modo subprocess e
 escolhe Selector sozinho (por isso `scripts/dev.ps1` e o comando canônico do
 README funcionam).
+
+### 7.11 Cliente não abre: `Cannot read properties of undefined (reading 'requestSingleInstanceLock')`
+
+**Sintoma:** `npm run dev`/`npm start` (ou o `.exe` chamado a partir desse
+terminal) morre em menos de um segundo, sem janela. No console aparece o
+stack trace acima, com `electron_1.app` **undefined**.
+
+**Causa:** o terminal de origem está hospedado por outro app Electron (VS Code,
+outro harness etc.) e exporta **`ELECTRON_RUN_AS_NODE=1`**. A variável é
+herdada: o binário do Electron passa a rodar como **Node puro**, então
+`require("electron")` devolve o *caminho do executável* em vez da API — `app`,
+`BrowserWindow` e companhia ficam `undefined`.
+
+**Diagnóstico:**
+
+```powershell
+Get-ChildItem Env: | Where-Object Name -like '*ELECTRON*'   # ELECTRON_RUN_AS_NODE 1 = causa
+```
+
+**Correção:** os scripts `dev` e `start` do `desktop/package.json` passam por
+`scripts/run-electron.mjs`, que **remove** a variável antes de subir o Electron.
+Se você chama `electron .` na mão, limpe a variável na sessão:
+
+```powershell
+Remove-Item Env:ELECTRON_RUN_AS_NODE   # só nesta janela
+```
+
+Não adianta `cross-env ELECTRON_RUN_AS_NODE=`: valor vazio ainda conta como
+definida para o Electron.
+
+### 7.12 Instalador do cliente trava no meio
+
+**Sintoma:** o assistente do `Microzup Setup <versão>.exe` para em "Instalando"
+(~63%) ou some sem instalar nada.
+
+**Correção:** veja §4.2 — feche a instância (inclusive a da bandeja), rode o
+desinstalador antigo quando houver, e use a instalação manual por cópia do
+`win-unpacked` se o NSIS insistir.
 
 ---
 

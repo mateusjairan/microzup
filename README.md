@@ -20,6 +20,10 @@ otimista, anexos, busca, WS com reconexão, painel admin). Pendências conhecida
 - Assinatura de código: o piloto aceita build não assinado (aviso do SmartScreen
   documentado na seção 4.1 de [`docs/operacao.md`](docs/operacao.md)); o
   executável do servidor já foi validado (33,6 MB, health 200, envelope no 401);
+- Instalador NSIS: em uma estação o assistente trava em "Instalando" (~63%) sem
+  escrever no destino — causa raiz não reproduzida fora dela. Procedimento de
+  recuperação e instalação manual por cópia do `win-unpacked` na seção 4.2 de
+  [`docs/operacao.md`](docs/operacao.md);
 - Piloto real com um setor (critérios de aceite no plano-mvp §9 — backup/restore
   já testado de ponta a ponta, ver a seção 3.3 de [`docs/operacao.md`](docs/operacao.md)).
 
