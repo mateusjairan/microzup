@@ -60,7 +60,18 @@ const TOKENS_KEY = "microzup.tokens";
 const OUTBOX_KEY = "microzup.outbox";
 const PREFS_KEY = "microzup.prefs";
 
-const FALLBACK_SERVER = "http://localhost:8666";
+/**
+ * Endereço do servidor quando NÃO há preload do Electron (dev web puro e
+ * fallback de navegador). No app empacotado quem manda é o main
+ * (`electron/ipc-contract.ts`), com o mesmo padrão de LAN.
+ */
+function defaultServerUrl(): string {
+  const fromEnv: unknown = import.meta.env.VITE_SERVER_URL;
+  if (typeof fromEnv === "string" && fromEnv.length > 0) return fromEnv;
+  return "http://192.168.10.17:8666";
+}
+
+const FALLBACK_SERVER = defaultServerUrl();
 
 // Proteção anti-regressão: DENTRO do Electron o preload DEVE existir. O
 // fallback de navegador é só para dev web — no app empacotado ele escondia

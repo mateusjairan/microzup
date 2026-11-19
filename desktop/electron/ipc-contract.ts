@@ -79,7 +79,20 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
   lastServerVersion: null,
 };
 
-export const DEFAULT_SERVER_URL = "http://localhost:8666";
+/**
+ * Endereço sugerido do servidor na primeira execução (plano-frontend §4: a tela
+ * de servidor aparece pré-preenchida, sem descoberta automática no MVP).
+ *
+ * O piloto roda em LAN: o servidor fica numa máquina e o cliente nas estações,
+ * então `localhost` apontaria para a própria estação e a primeira execução
+ * falharia em toda máquina que não fosse a do servidor. Para outro endereço,
+ * defina MICROZUP_SERVER_URL no ambiente do build — ou digite no campo
+ * **Servidor** do login, que tem precedência e fica persistido.
+ */
+const SERVER_URL_FROM_ENV = process.env.MICROZUP_SERVER_URL?.trim() ?? "";
+
+export const DEFAULT_SERVER_URL =
+  SERVER_URL_FROM_ENV.length > 0 ? SERVER_URL_FROM_ENV : "http://192.168.10.17:8666";
 
 /** Conteúdo integral do arquivo "settings" (preferências + servidor). */
 export interface PersistedSettings extends AppPreferences {
