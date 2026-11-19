@@ -97,6 +97,12 @@ export const DEFAULT_SERVER_URL =
 /** Conteúdo integral do arquivo "settings" (preferências + servidor). */
 export interface PersistedSettings extends AppPreferences {
   serverUrl: string;
+  /**
+   * Marca a migração única do padrão antigo (`http://localhost:8666`) para o
+   * endereço de LAN. Depois de marcada, um endereço digitado pelo usuário é
+   * respeitado para sempre — a migração nunca reescreve de novo.
+   */
+  serverUrlMigratedToLan?: boolean;
 }
 
 export const DEFAULT_SETTINGS: PersistedSettings = {

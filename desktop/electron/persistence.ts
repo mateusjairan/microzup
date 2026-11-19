@@ -75,9 +75,33 @@ async function migrateLegacyConfig(): Promise<void> {
   }
 }
 
+/**
+ * Padrão das versões anteriores ao endereço de LAN.
+ *
+ * O cliente gravava `http://localhost:8666` na primeira execução. Em qualquer
+ * estação que não seja a do servidor isso deixa de funcionar, e o valor salvo
+ * sobrevive a mudanças do padrão embutido — sem migração, a estação ficaria
+ * presa no localhost para sempre.
+ */
+const LEGACY_LOCAL_SERVER = "http://localhost:8666";
+
+/**
+ * Troca o endereço legado de localhost pelo padrão de LAN **uma única vez**.
+ * A flag impede que um endereço digitado de propósito seja sobrescrito depois.
+ */
+async function migrateServerUrlToLan(): Promise<void> {
+  if (settingsStore === null) return;
+  if (settingsStore.get("serverUrlMigratedToLan") === true) return;
+  if (settingsStore.get("serverUrl") === LEGACY_LOCAL_SERVER) {
+    settingsStore.set("serverUrl", DEFAULT_SETTINGS.serverUrl);
+  }
+  settingsStore.set("serverUrlMigratedToLan", true);
+}
+
 export async function initPersistence(): Promise<PersistedSettings> {
   await ensureStores();
   await migrateLegacyConfig();
+  await migrateServerUrlToLan();
   cachedSettings = readSettingsSync();
   return cachedSettings;
 }
