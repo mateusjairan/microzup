@@ -2,9 +2,10 @@ import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type Key
 import { Virtuoso, type ListRange, type ListProps, type ScrollerProps, type VirtuosoHandle } from "react-virtuoso";
 import { ArrowDown, Inbox, Loader } from "lucide-react";
 import { useI18n } from "../../app/I18nProvider";
-import { interpolate, MESSAGE_GROUP_WINDOW_MS } from "../utils/format";
+import { interpolate } from "../utils/format";
 import { useReducedMotion } from "../utils/useReducedMotion";
 import { EmptyState } from "../ui/EmptyState";
+import { buildFlagIndex, NO_ITEM_FLAGS, type ItemFlags } from "../../features/messages/itemFlags";
 import { DayDivider } from "./DayDivider";
 import { MessageAnnouncer } from "./MessageAnnouncer";
 import { MessageBubble } from "./MessageBubble";
@@ -47,12 +48,6 @@ export interface MessageListProps {
   className?: string;
 }
 
-interface ItemFlags {
-  dayChanged: boolean;
-  grouped: boolean;
-  firstUnread: boolean;
-}
-
 /**
  * Contêineres intermediários do Virtuoso são puramente estruturais —
  * role="presentation" os torna transparentes na árvore de acessibilidade.
@@ -68,16 +63,6 @@ const FeedScrollerBase = forwardRef<HTMLDivElement, ScrollerProps & React.HTMLAt
     return <div {...props} ref={ref} />;
   },
 );
-
-function isSameDay(aIso: string, bIso: string): boolean {
-  const a = new Date(aIso);
-  const b = new Date(bIso);
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
 
 /**
  * Lista de mensagens (§7/§8.2): virtualizada (react-virtuoso), agrupada por
@@ -116,22 +101,12 @@ export function MessageList({
   const [visibleRange, setVisibleRange] = useState<ListRange>({ startIndex: 0, endIndex: 0 });
   const [unseen, setUnseen] = useState(0);
 
-  const flags = useMemo<ItemFlags[]>(() => {
-    return messages.map((message, index) => {
-      const previous = index > 0 ? messages[index - 1] : undefined;
-      const dayChanged = !previous || !isSameDay(previous.createdAt, message.createdAt);
-      const grouped =
-        previous !== undefined &&
-        !dayChanged &&
-        previous.senderId === message.senderId &&
-        !previous.deletedAt &&
-        !message.deletedAt &&
-        new Date(message.createdAt).getTime() - new Date(previous.createdAt).getTime() <=
-          MESSAGE_GROUP_WINDOW_MS;
-      const firstUnread = unreadSeq !== null && message.seq === unreadSeq;
-      return { dayChanged, grouped, firstUnread };
-    });
-  }, [messages, unreadSeq]);
+  // Flags por id (não por índice): o Virtuoso entrega o índice ABSOLUTO do
+  // `firstItemIndex` e indexar o array por ele zerava o lookup.
+  const flagsById = useMemo<Map<string, ItemFlags>>(
+    () => buildFlagIndex(messages, unreadSeq),
+    [messages, unreadSeq],
+  );
 
   useEffect(() => {
     const previousCount = lastCountRef.current;
@@ -202,8 +177,8 @@ export function MessageList({
   }, [messages, unreadSeq]);
 
   const itemContent = useCallback(
-    (index: number, message: ChatMessage) => {
-      const flag: ItemFlags = flags[index] ?? { dayChanged: true, grouped: false, firstUnread: false };
+    (_index: number, message: ChatMessage) => {
+      const flag: ItemFlags = flagsById.get(message.id) ?? NO_ITEM_FLAGS;
       const withAttachments: ChatMessage =
         attachmentsByMessage?.[message.id] === undefined
           ? message
@@ -232,7 +207,7 @@ export function MessageList({
       );
     },
     [
-      flags,
+      flagsById,
       currentUserId,
       onRetry,
       onEdit,
