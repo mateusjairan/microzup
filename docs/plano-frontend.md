@@ -118,6 +118,8 @@ Microzup
 
 O campo **Servidor** é obrigatório no desktop (não há descoberta automática no MVP), com botão "testar conexão" que bate em `/health` antes de habilitar o login.
 
+**Padrão de LAN (decisão do piloto):** a primeira execução abre com o endereço da estação servidora — `http://192.168.10.17:8666` — em vez de `localhost`. Como o cliente roda nas estações, `localhost` apontaria para a própria estação e toda máquina que não fosse a do servidor falharia na primeira execução. O valor vem de `DEFAULT_SERVER_URL` (`desktop/electron/ipc-contract.ts`), aceita `MICROZUP_SERVER_URL` no ambiente e é sempre sobreposto pelo que for digitado no campo Servidor. Detalhes operacionais (IP fixo, rebuild, verificação) na seção 4.3 de [`operacao.md`](operacao.md).
+
 ### Sidebar colapsada (72 px)
 
 ```

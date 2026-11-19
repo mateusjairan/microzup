@@ -118,6 +118,12 @@ npm run test:e2e     # E2E: login, retry, scroll, reconexão, upload 50 MB, atal
 O painel de administração (usuários, setores, canais, auditoria, uso de disco)
 fica no próprio cliente, visível apenas para papel `admin`.
 
+Na primeira execução o cliente abre apontando para a **LAN**
+(`http://192.168.10.17:8666`) em vez de `localhost` — é o endereço da estação
+servidora neste piloto. O campo **Servidor** do login troca isso sem rebuild;
+IP fixo, variável de ambiente e verificação na seção 4.3 de
+[`docs/operacao.md`](docs/operacao.md).
+
 ### Qualidade e testes (server/)
 
 ```powershell

@@ -160,9 +160,10 @@ Na máquina do servidor, PowerShell **como administrador**:
 .\scripts\open-firewall.ps1 -Port 8666 -RemoteAddress 192.168.0.0/24
 ```
 
-O cliente usa `http://<IP-do-servidor>:8666` no campo **Servidor** do login.
-O plano é HTTP puro na LAN (decisão documentada — TLS na fase 2); restrinja a
-regra à sub-rede corporativa.
+O cliente já abre com `http://192.168.10.17:8666` como endereço **padrão** na
+primeira execução (o IP da estação servidora neste piloto — §4.3); o campo
+**Servidor** do login permite trocar sem rebuild. O plano é HTTP puro na LAN
+(decisão documentada — TLS na fase 2); restrinja a regra à sub-rede corporativa.
 
 ---
 
@@ -431,6 +432,43 @@ Regras da instalação manual:
   a pasta como instalação limpa (sem desinstalador anterior para rodar);
 - para atualizar depois de um `npm run build`, repita a cópia (é o mesmo
   payload que o instalador distribuiria).
+
+### 4.3 Endereço padrão do servidor (LAN)
+
+O padrão **não é mais `localhost`**: o piloto roda em LAN, o servidor fica numa
+máquina e o cliente nas estações — em qualquer estação que não seja a do
+servidor, `localhost` aponta para a própria estação e a primeira execução falha.
+O padrão embutido é `http://192.168.10.17:8666` (IP da máquina servidora).
+
+Precedência (a primeira que existir vence):
+
+1. **Campo Servidor** do login, que fica persistido em
+   `%APPDATA%\microzup-desktop\config.json` — troca sem rebuild;
+2. `MICROZUP_SERVER_URL` no ambiente (lido pelo processo main na primeira
+   execução quando ainda não há endereço salvo);
+3. o padrão de LAN embutido.
+
+Onde vive, se precisar mudar para outro servidor:
+
+| Arquivo | Papel |
+|---|---|
+| `desktop/electron/ipc-contract.ts` (`DEFAULT_SERVER_URL`) | padrão usado pelo app empacotado (main process) |
+| `desktop/src/lib/bridge.ts` (`FALLBACK_SERVER`) | só no fallback de navegador/`vite` puro; aceita `VITE_SERVER_URL` |
+
+> **IP fixo:** o padrão é um endereço literal. Se o servidor pegar outro IP por
+> DHCP, ajuste a reserva no roteador (ou o IP estático) **ou** troque no campo
+> Servidor de cada estação. Rebuildar com `MICROZUP_SERVER_URL` também funciona,
+> mas o campo do login é o caminho sem deploy.
+
+Para testar a estação servidora depois de mudar algo:
+
+```powershell
+Invoke-RestMethod http://192.168.10.17:8666/health   # 200 + {"status":"ok",...}
+Get-NetFirewallRule -DisplayName "Microzup API (8666)" | Select-Object Enabled,Action
+```
+
+A suíte E2E **não** depende desse padrão: `e2e/app.ts` preenche o campo Servidor
+com `BASE_URL` (`127.0.0.1:8666`) em todo login.
 
 ---
 
