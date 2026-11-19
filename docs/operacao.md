@@ -442,11 +442,22 @@ O padrão embutido é `http://192.168.10.17:8666` (IP da máquina servidora).
 
 Precedência (a primeira que existir vence):
 
-1. **Campo Servidor** do login, que fica persistido em
-   `%APPDATA%\microzup-desktop\config.json` — troca sem rebuild;
-2. `MICROZUP_SERVER_URL` no ambiente (lido pelo processo main na primeira
-   execução quando ainda não há endereço salvo);
+1. **Campo Servidor** do login, persistido em
+   `%APPDATA%\microzup-desktop\settings.json` (electron-store) — troca sem
+   rebuild;
+2. `MICROZUP_SERVER_URL` no ambiente (lido pelo processo main quando ainda não
+   há endereço salvo);
 3. o padrão de LAN embutido.
+
+> **Migração única:** estações que já rodaram uma versão antiga têm
+> `http://localhost:8666` gravado em `settings.json` e ficariam presas nele. Na
+> primeira execução do build atual esse valor legado é trocado pelo padrão de
+> LAN uma vez só (flag `serverUrlMigratedToLan`), e a partir daí o que o usuário
+> digitar é respeitado — a migração não reescreve de novo.
+>
+> O `config.json` na mesma pasta é o config **legado** do main.js antigo; ele
+> só é lido quando ainda não existe `settings.json` (e então renomeado para
+> `config.json.migrated`).
 
 Onde vive, se precisar mudar para outro servidor:
 
