@@ -5,13 +5,13 @@
   "description": "Microzup — cliente desktop de chat corporativo",
   "main": "electron/dist/main.js",
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"tsc -p electron --watch --preserveWatchOutput\" \"esbuild electron/preload.ts --bundle --platform=node --format=cjs --external:electron --watch --outfile=electron/dist/preload.js\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "dev": "concurrently -k \"vite\" \"tsc -p electron --watch --preserveWatchOutput\" \"esbuild electron/preload.ts --bundle --platform=node --format=cjs --external:electron --watch --outfile=electron/dist/preload.js\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 node scripts/run-electron.mjs\"",
     "typecheck": "tsc --noEmit && tsc -p electron --noEmit",
     "test:e2e": "playwright test",
     "build": "vite build && npm run build:electron",
     "build:electron": "tsc -p electron && npm run build:preload",
     "build:preload": "esbuild electron/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/dist/preload.js",
-    "start": "electron .",
+    "start": "node scripts/run-electron.mjs",
     "gen:api": "node scripts/gen-api.mjs",
     "dist": "npm run build && electron-builder"
   },
