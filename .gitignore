@@ -18,6 +18,7 @@ desktop/openapi.json
 desktop/storybook-static/
 desktop/.e2e-*
 desktop/e2e/.tmp/
+desktop/e2e/.results/
 desktop/dist/
 desktop/release/
 desktop/out/
