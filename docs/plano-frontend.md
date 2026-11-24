@@ -1,7 +1,9 @@
-# Microzup — Plano de front-end (desktop)
+# Microzup — Plano de front-end (web)
 
-> Interface "MSN moderno" para uso corporativo farmacêutico — v1.0
-> Complementa `docs/plano-mvp.md`. Alvo: Electron + React 19 + TypeScript, Windows 10/11.
+> Interface "MSN moderno" para uso corporativo farmacêutico — v1.1
+> Complementa `docs/plano-mvp.md`. Alvo: React 19 + TypeScript + Vite, servido pelo FastAPI
+> e aberto no navegador (Windows 10/11). A casca Electron foi descartada em 2026-11-24;
+> a seção 13 descreve o que substituiu cada recurso nativo.
 
 ---
 
@@ -116,9 +118,7 @@ Microzup
 └──────────────────────────────────────────────┘
 ```
 
-O campo **Servidor** é obrigatório no desktop (não há descoberta automática no MVP), com botão "testar conexão" que bate em `/health` antes de habilitar o login.
-
-**Padrão de LAN (decisão do piloto):** a primeira execução abre com o endereço da estação servidora — `http://192.168.10.17:8666` — em vez de `localhost`. Como o cliente roda nas estações, `localhost` apontaria para a própria estação e toda máquina que não fosse a do servidor falharia na primeira execução. O valor vem de `DEFAULT_SERVER_URL` (`desktop/electron/ipc-contract.ts`), aceita `MICROZUP_SERVER_URL` no ambiente e é sempre sobreposto pelo que for digitado no campo Servidor. Detalhes operacionais (IP fixo, rebuild, verificação) na seção 4.3 de [`operacao.md`](operacao.md).
+Não há campo **Servidor**: a página é servida pelo próprio backend, então o login já fala com a mesma origem. O usuário abre `http://<servidor>:8666` e informa usuário/senha; "Manter conectado" escolhe entre cookie persistente (30 dias) e cookie de sessão do navegador.
 
 ### Sidebar colapsada (72 px)
 
@@ -273,16 +273,16 @@ Retry é sempre idempotente (`client_id`); o usuário nunca vê duplicata.
 ### 8.4 "Chamar atenção" (nudge)
 
 - Ícone de sino ao lado do anexo; **1 por conversa a cada 5 min**.
-- Efeito: `flashFrame` na taskbar + toast "Ana chamou sua atenção"; sem tremer a janela.
+- Efeito: notificação do navegador + vibração curta (quando suportada) "Ana chamou sua atenção"; sem tremer a aba.
 - Bloqueado em `Não perturbe` e se o remetente estiver silenciado. Registrado em auditoria.
 
 ### 8.5 Notificações
 
 | Situação | Toast | Som | Badge |
 |---|---|---|---|
-| Janela focada na conversa | não | não | limpa |
-| Janela em outra conversa | sim (agrupado por conversa) | opcional | sim |
-| Janela minimizada / bandeja | sim | opcional | sim + overlay na taskbar |
+| Aba focada na conversa | não | não | limpa |
+| Aba em outra conversa | sim (agrupado por conversa) | opcional | sim |
+| Aba em segundo plano | sim | opcional | sim + badge no título / app badge |
 | `Não perturbe` | não | não | sim |
 | Arquivo recebido | sim | opcional | sim |
 | Reconexão | banner, não toast | não | — |
@@ -295,7 +295,7 @@ Clique no toast abre a conversa e marca lida. Máx. 3 toasts por minuto (agrupa 
 - Até 5 anexos por mensagem, 100 MB cada (limite do servidor exibido no erro).
 - Card com progresso por arquivo, cancelar, remover antes de enviar.
 - Imagem: thumbnail + lightbox (zoom, anterior/próxima, baixar, Esc).
-- Download mostra progresso no card; arquivo aberto direto do disco após salvar.
+- Download mostra progresso no card; o Blob verificado é entregue ao gerenciador de downloads do navegador.
 - Extensão bloqueada: erro inline claro antes de subir (validação no cliente + servidor).
 
 ### 8.7 Busca
@@ -384,7 +384,7 @@ Táticas: virtualização (`react-virtuoso`), imagens lazy + thumbnail no servid
 - `date-fns` com locale `pt-BR` (Hoje/Ontem, 24 h)
 
 ```
-desktop/src/
+web/src/
 ├─ app/            # boot, router, providers
 ├─ features/
 │  ├─ auth/        # login, conexão, sessão
@@ -405,23 +405,27 @@ desktop/src/
 
 ---
 
-## 13. Casca Electron
+## 13. Plataforma web (o que substituiu o shell)
 
-- `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, preload com allowlist de IPC.
-- CSP sem origem remota; navegação externa bloqueada (links abrem no navegador padrão após confirmação).
-- Barra de título customizada com `-webkit-app-region: drag`; botões nativos de minimizar/maximizar/fechar.
-- Bandeja: ícone com badge, menu (Abrir, Status, Sair), fechar minimiza para a bandeja (configurável).
-- Instância única; deep link `microzup://conversation/<id>` (fase 2).
-- Refresh token em `safeStorage` (DPAPI), nunca em `localStorage`.
-- Toast nativo via `Notification` com ação "Abrir"; respeita Assistente de Foco do Windows.
-- Tela de bloqueio após inatividade configurável (padrão 15 min) — reautentica sem descartar rascunho.
-- Atualização: verificação de versão no servidor + instalador disponibilizado em share; banner "nova versão disponível" (sem auto-update silencioso no MVP).
+- Sem shell nativo: o SPA é servido pelo FastAPI em `/`; a CSP e os headers de segurança
+  (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) são emitidos pelo servidor.
+- Auth: access token só em memória; refresh token em cookie `HttpOnly` + `SameSite=Strict`
+  (path `/auth`). Nada de token em `localStorage`/`sessionStorage`.
+- Notificações: `Notification` com `onclick` que foca a aba e abre a conversa.
+- Badge de não lidas: `document.title` sempre; `navigator.setAppBadge` quando suportado.
+- Download: Blob verificado por SHA-256 entregue ao gerenciador de downloads (sem diálogo nativo
+  nem abertura automática do arquivo).
+- Inatividade: observada no documento (`lib/platform.ts`) → auto-ausente e bloqueio de sessão
+  configurável (padrão 15 min), com reautenticação sem descartar rascunho.
+- "Abrir conversa em outra janela" vira aba com `?conversation=<id>` (o boot lê o parâmetro).
+- Atualização: o cliente é o build servido; o banner de nova versão do servidor continua. Não há
+  auto-update de cliente.
 
 ---
 
 ## 14. Testes e qualidade visual
 
-- **Playwright** com screenshots de 1024×680, 1280×800 e 1440×900 (light e dark) como baseline de regressão visual.
+- **Playwright** contra o build real servido pelo backend, em viewports de 1024×680, 1280×800 e 1440×900 (light e dark). Os baselines Electron antigos foram removidos; a regressão visual será regerada no navegador.
 - **axe-core** em todas as telas (zero violações sérias).
 - Testes de interação: envio otimista + falha + retry; scroll com novas mensagens; reconexão; upload de 50 MB; atalhos.
 - **Storybook** offline para os 20 componentes principais (estados vazios/erro incluídos).
@@ -437,9 +441,9 @@ desktop/src/
 | **F1 — Identidade e presença** | conexão/login, perfil, status + recado, auto-ausente, sidebar com setores | 2 d |
 | **F2 — Conversa** | lista virtualizada, agrupamento, bolhas, composer, envio otimista, não lidas, scroll | 3 d |
 | **F3 — Arquivos** | drag-drop, colar, progresso, cards, imagens/lightbox | 2 d |
-| **F4 — Tempo real e avisos** | WS + reconexão, typing, presença ao vivo, toasts, bandeja, badge, "chamar atenção" | 2 d |
+| **F4 — Tempo real e avisos** | WS + reconexão, typing, presença ao vivo, notificações, badge, "chamar atenção" | 2 d |
 | **F5 — Busca e detalhes** | palette Ctrl+K, busca de mensagens, painel de membros/arquivos | 1,5 d |
-| **F6 — Polimento** | estados de borda, a11y, atalhos, regressão visual, bloqueio de sessão, instalador | 2,5 d |
+| **F6 — Polimento** | estados de borda, a11y, atalhos, regressão visual, bloqueio de sessão, build servido pelo backend | 2,5 d |
 
 **~15 dias** de front-end. Sobrepondo F0–F2 com M2/M3 do backend (contrato OpenAPI + mocks MSW), o cronograma total do MVP fica em **~24–30 dias** — M4 concentra F4–F6 e o empacotamento.
 

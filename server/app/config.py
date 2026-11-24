@@ -1,3 +1,4 @@
+import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -37,7 +38,16 @@ class Settings(BaseSettings):
     rate_limit_upload_per_minute: int = 20
     rate_limit_message_per_minute: int = 30
 
-    cors_origins: str = "http://localhost:5173"
+    # O SPA é servido pela própria API (mesma origem): CORS fica vazio por
+    # padrão. Só preencha para um front externo (dev fora do proxy do Vite).
+    cors_origins: str = ""
+
+    # Pasta do build do SPA (web/dist). Relativa à raiz do repositório.
+    web_dist_dir: Path = Path("web/dist")
+
+    # Cookie do refresh token: HttpOnly + SameSite=Strict. `Secure` exige TLS;
+    # fica desligado por padrão porque o piloto roda em HTTP na LAN.
+    cookie_secure: bool = False
 
     storage_dir: Path = Path("./data")
     max_upload_mb: int = 100
@@ -62,6 +72,13 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    def web_dist_path(self) -> Path:
+        """Resolve `WEB_DIST_DIR`: absoluto, ao lado do exe (PyInstaller) ou na raiz do repo."""
+        if self.web_dist_dir.is_absolute():
+            return self.web_dist_dir
+        base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
+        return base / self.web_dist_dir
 
     @model_validator(mode="after")
     def _guard_production_secret(self) -> "Settings":

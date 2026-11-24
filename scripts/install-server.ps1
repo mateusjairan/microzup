@@ -23,6 +23,19 @@ try {
     }
 
     if (-not $SkipBuild) {
+        # O SPA e servido pelo backend: sem web\dist o exe sobe e "/" da 404.
+        $web = Join-Path (Split-Path -Parent $PSScriptRoot) "web"
+        Push-Location $web
+        try {
+            npm ci
+            if ($LASTEXITCODE -ne 0) { throw "npm ci falhou (codigo $LASTEXITCODE)." }
+            npm run build
+            if ($LASTEXITCODE -ne 0) { throw "npm run build falhou (codigo $LASTEXITCODE)." }
+        }
+        finally {
+            Pop-Location
+        }
+
         uv run pyinstaller --noconfirm --clean microzup.spec
         if ($LASTEXITCODE -ne 0) { throw "pyinstaller falhou (codigo $LASTEXITCODE)." }
     }

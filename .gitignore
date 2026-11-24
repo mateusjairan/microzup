@@ -11,17 +11,15 @@ venv/
 coverage.xml
 htmlcov/
 
-# Node / Electron
+# Node / web
 node_modules/
 .npm-cache/
-desktop/openapi.json
-desktop/storybook-static/
-desktop/.e2e-*
-desktop/e2e/.tmp/
-desktop/e2e/.results/
-desktop/dist/
-desktop/release/
-desktop/out/
+web/openapi.json
+web/storybook-static/
+web/.e2e-*
+web/e2e/.tmp/
+web/e2e/.results/
+web/dist/
 .vite/
 *.tsbuildinfo
 
@@ -43,7 +41,7 @@ data/
 build/
 dist/
 release/
-!desktop/build/
+!web/public/
 !server/*.spec
 
 # Logs e temporários

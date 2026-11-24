@@ -1,7 +1,13 @@
 # Microzup — Chat corporativo farmacêutico
 
-> Plano técnico do MVP — v1.2
+> Plano técnico do MVP — v1.3
 > Escopo: mensagens e arquivos entre membros de equipe e setores, dentro da rede local (LAN) da empresa.
+>
+> **Revisão v1.3 (2026-11-24):** o cliente desktop Electron foi descartado. O front-end é
+> uma SPA React servida pelo próprio FastAPI, acessada pelo navegador na LAN. O refresh
+> token passou a viver em cookie `HttpOnly` + `SameSite=Strict` — decidido abaixo, em
+> "Por que cliente web". As seções de stack, estrutura, segurança, deploy e roadmap já
+> refletem o modelo web; referências ao Electron aparecem apenas como histórico.
 
 ---
 
@@ -9,7 +15,7 @@
 
 | Tema | Decisão |
 |---|---|
-| Cliente | App desktop instalável (Windows), com painel de administração no próprio cliente |
+| Cliente | SPA React (navegador) servida pelo backend, com painel de administração na própria SPA |
 | Backend | Python 3.13 + FastAPI |
 | Banco de dados | **PostgreSQL 17** |
 | Autenticação | Contas locais (usuário + senha), criadas por admin |
@@ -17,13 +23,13 @@
 | Rede | Servidor único na LAN; clientes conectam via HTTP/WebSocket |
 | Arquitetura | **Camadas (Clean/Hexagonal simplificada) + Repository + Service Layer + DI** |
 
-### Por que Electron (e não Tauri/PyWebView)
+### Por que cliente web (e não Electron/Tauri)
 
-- **Electron**: toolchain maduro no Windows, mesmo código React roda no navegador (útil para desenvolvimento/teste), notificações nativas, `electron-builder` gera instalador NSIS com assinatura e atalho. Custo: instalador ~120 MB.
-- **Tauri**: binário ~10 MB, mas exige Rust no build e WebView2 nas estações (quase sempre presente, porém mais um pré-requisito a validar na TI).
-- **PyWebView + PyInstaller**: mantém um único runtime (Python), porém notificações, bandeja, auto-atualização e empacotamento são bem menos previsíveis.
-
-Decisão: **Electron + React**, com o renderer 100% reaproveitável em navegador. Se a TI vetar Node no build, o fallback é PyWebView sem mudar backend nem contrato de API.
+- **Um artefato só:** o `web/dist` é servido pelo mesmo processo FastAPI que expõe a API. Não há instalação, assinatura, auto-update nem prerequisito de Node nas estações — a TI só precisa liberar a porta 8666 na LAN.
+- **Mesma origem:** sem CORS, sem configuração de servidor no primeiro acesso, sem `file://`. O usuário abre `http://<servidor>:8666`.
+- **Auth mais segura:** access token em memória + refresh em cookie `HttpOnly`/`SameSite=Strict`. O JavaScript nunca vê o refresh token, então não depende de `safeStorage`/DPAPI.
+- **Custo aceito:** sem bandeja nativa, sem janela frameless e sem "abrir arquivo" automático; notificações viram a Notification API, o badge vira `document.title`/`navigator.setAppBadge` e downloads passam pelo gerenciador do navegador.
+- **Histórico:** Electron + React chegou a ser implementado e foi descartado em 2026-11-24; o renderer React foi integralmente reaproveitado, o shell (`electron/`) foi removido.
 
 ### Por que PostgreSQL
 
@@ -53,11 +59,11 @@ Decisão: **Electron + React**, com o renderer 100% reaproveitável em navegador
    - deduplicação por SHA-256;
    - extensões bloqueadas (`.exe`, `.bat`, `.cmd`, `.ps1`, `.scr`, `.msi`, `.js`).
 7. **Presença** (online/offline/ausente) e indicador "digitando…".
-8. **Notificações** de desktop + badge de não lidas na bandeja.
+8. **Notificações** do navegador + badge de não lidas no título da aba.
 9. **Busca** full-text em mensagens, restrita às conversas do usuário.
 10. **Painel admin mínimo**: usuários, setores, canais, uso de disco, log de auditoria.
 11. **Auditoria append-only** de ações sensíveis (login, criação/edição/exclusão, download de arquivo, mudança de cadastro).
-12. **Instaladores**: `.exe` do cliente (NSIS) + script de instalação do servidor como serviço do Windows.
+12. **Entrega**: build do SPA (`web/dist`) servido pelo backend + script de instalação do servidor como serviço do Windows.
 
 ### Fora (explicitamente)
 
@@ -116,12 +122,12 @@ Histórico único, auditoria confiável, autorização por conversa e arquivos d
 - `structlog` (logs JSON), `ruff` + `mypy` (qualidade)
 - Empacotamento: PyInstaller → `microzup-server.exe`, instalado como serviço Windows via NSSM
 
-**Cliente**
-- Electron (última estável) + `electron-builder` (NSIS, x64)
-- React 19 + TypeScript + Vite
+**Cliente (web)**
+- React 19 + TypeScript + Vite, build estático servido pelo FastAPI em `/`
 - Tailwind CSS + Radix (componentes acessíveis, sem dependência de CDN)
 - Zustand (estado) + `fetch` tipado a partir do OpenAPI (`openapi-typescript`)
-- `electron-store` com criptografia DPAPI para guardar o refresh token
+- Sem shell nativo: notificações via `Notification`, badge via `document.title`/`navigator.setAppBadge`, download via Blob
+- Auth: access token em memória; refresh token em cookie `HttpOnly` + `SameSite=Strict` (path `/auth`)
 
 **Infra de desenvolvimento**
 - `docker-compose.yml` com `postgres:17` (+ volume nomeado) e `adminer` opcional
@@ -175,11 +181,12 @@ microzup/
 │  │  └─ e2e/                # API + WebSocket
 │  ├─ scripts/               # criar admin, seed, backup
 │  └─ docker-compose.yml
-├─ desktop/
+├─ web/
 │  ├─ package.json
-│  ├─ electron/              # main.ts, preload.ts, tray, notificações
 │  ├─ src/                   # React (pages, components, lib, hooks)
-│  └─ build/                 # ícones, instalador
+│  ├─ public/                # ícones estáticos
+│  ├─ e2e/                   # Playwright contra o build servido pelo backend
+│  └─ dist/                  # build do SPA (não versionado)
 ├─ scripts/
 │  ├─ install-server.ps1
 │  ├─ backup.ps1
@@ -444,9 +451,9 @@ ALTER DEFAULT PRIVILEGES FOR ROLE microzup_owner IN SCHEMA public
 ### Auth
 | Método | Rota | Descrição |
 |---|---|---|
-| POST | `/auth/login` | `{username, password, device_name}` → access (15 min) + refresh (30 d) |
-| POST | `/auth/refresh` | rotaciona refresh token |
-| POST | `/auth/logout` | revoga a sessão atual |
+| POST | `/auth/login` | `{username, password, device_name, remember}` → access (15 min) no corpo + refresh (30 d) em cookie `HttpOnly` |
+| POST | `/auth/refresh` | sem corpo: lê o cookie, rotaciona o refresh e devolve só o novo access |
+| POST | `/auth/logout` | sem corpo: revoga a sessão do cookie e o apaga |
 | POST | `/ws/ticket` | emite ticket opaco de uso único (30 s) para abrir o WebSocket |
 | GET | `/me` | perfil + setor + papel |
 
@@ -526,7 +533,7 @@ Robustez: reconexão com backoff exponencial + **catch-up por cursor** (`after_s
 - Tokens: access JWT curto (15 min) + refresh opaco (hash no banco, rotativo); `Authorization: Bearer`.
 - Autorização **sempre** revalidada no servidor por conversa — nunca confiar no cliente.
 - Uploads: nome sanitizado, MIME sniffing, extensões bloqueadas, sem execução no diretório de dados.
-- CORS restrito à origem do renderer (`null` no Electron instalado, `http://localhost:5173` em dev) e sem credenciais em cookie.
+- Mesma origem: o SPA é servido pela API, então `CORS_ORIGINS` fica vazio por padrão. O refresh token é cookie `HttpOnly` + `SameSite=Strict` (path `/auth`); `refresh`/`logout` ainda recusam `Origin` de outro host. Em dev o Vite faz proxy para a API.
 - Rate limit básico (login, upload, envio) em memória — suficiente para 1 processo.
 - Logs estruturados em JSON, rotação diária, sem corpo de mensagem em log.
 - **TLS**: MVP roda HTTP puro na LAN (decisão consciente e documentada). Fase 2: certificado interno + pinning no cliente.
@@ -565,7 +572,9 @@ Contrato em `server/.env.example`; segredos reais nunca entram no Git.
 | `ACCESS_TOKEN_TTL_MINUTES` | `15` | validade do access token |
 | `REFRESH_TOKEN_TTL_DAYS` | `30` | validade do refresh |
 | `WS_TICKET_TTL_SECONDS` | `30` | validade do ticket de WebSocket |
-| `CORS_ORIGINS` | `http://localhost:5173,null` | origens permitidas, separadas por vírgula (`null` = renderer via `file://` no instalado) |
+| `CORS_ORIGINS` | vazio | origens permitidas, separadas por vírgula; vazio = mesma origem (SPA servida pela API) |
+| `WEB_DIST_DIR` | `web/dist` | build do SPA servido em `/`; sem ele o backend loga `web_build_missing` |
+| `COOKIE_SECURE` | `false` | marca o cookie de refresh como `Secure` (ligue quando o piloto migrar para TLS) |
 | `STORAGE_DIR` | `./data` | raiz de arquivos e temporários |
 | `MAX_UPLOAD_MB` | `100` | limite por arquivo |
 | `MAX_ATTACHMENTS_PER_MESSAGE` | `5` | limite por mensagem |
@@ -597,7 +606,7 @@ Regra: variável nova entra em `.env.example`, nesta tabela e em `config.py` na 
 | **M1 — Identidade** ✅ | `User`/`Session`/`AuditLog`, Argon2id, login/refresh/logout, `create-admin`, autorização admin, testes unit/integration/api | 3–4 d |
 | **M2 — Conversas** ✅ | Canais por setor, DMs, `SendMessage` idempotente, paginação por `seq`, `EventBus` + WS (ticket, presença, typing), não lidas, testes unit/integration/api | 5–6 d |
 | **M3 — Arquivos** ✅ | Upload streaming, dedupe por SHA-256, download autorizado, extensões bloqueadas, limpeza de órfãos, testes | 3–4 d |
-| **M4 — Cliente desktop** ✅ | Electron + React/TS, login, 3 painéis, presença, envio otimista, anexos, busca, WS com reconexão (ver `plano-frontend.md`); build e typecheck verdes | 6–7 d |
+| **M4 — Cliente web** ✅ | React/TS servido pelo FastAPI, login, 3 painéis, presença, envio otimista, anexos, busca, WS com reconexão (ver `plano-frontend.md`); build e typecheck verdes | 6–7 d |
 | **M5 — Endurecimento** ✅ | Busca full-text (`/search`), auditoria e estatísticas no admin, `backup.ps1`, `install-server.ps1` + spec PyInstaller, scripts de operação | 3–4 d |
 
 **Total: ~24–30 dias** até um piloto real, contando o front-end detalhado em `plano-frontend.md` (F0–F3 rodam em paralelo a M2/M3).
@@ -611,7 +620,7 @@ Regra: variável nova entra em `.env.example`, nesta tabela e em `config.py` na 
 - [ ] Usuário de outro setor não acessa conversa nem arquivo alheio (teste de autorização).
 - [ ] Matar o servidor/Postgres e reiniciar: nenhuma mensagem perdida, clientes reconectam sozinhos.
 - [ ] Backup (`pg_dump` + arquivos) e restore em máquina limpa reproduzem o histórico.
-- [ ] Instalador roda em Windows 10/11 sem Python, Node nem Postgres instalados.
+- [ ] Servidor instalado como serviço do Windows entrega SPA + API em `http://<servidor>:8666`, sem Node na estação cliente.
 - [ ] Cobertura de domínio e casos de uso > 80% (sem banco, com fakes).
 
 ---
@@ -620,7 +629,7 @@ Regra: variável nova entra em `.env.example`, nesta tabela e em `config.py` na 
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| TI não permite instalar `.exe` nas estações | Alto | Validar cedo; o renderer React pode ser servido no navegador como fallback (não implementado) |
+| TI não permite instalar `.exe` nas estações | Baixo | Resolvido: o cliente é o navegador; só o servidor recebe instalador |
 | Antivírus bloqueia executável não assinado | Alto | Assinar com certificado interno ou liberar por GPO em M0 |
 | Postgres indisponível derruba o chat | Alto | Serviço com restart automático, monitoramento de health, backup validado |
 | Falta de DBA para operar Postgres | Médio | `docker-compose` versionado + `operacao.md`; rotina de backup automatizada |

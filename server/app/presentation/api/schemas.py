@@ -48,21 +48,19 @@ class LoginIn(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     password: str
     device_name: str | None = Field(default=None, max_length=120)
+    # "Manter conectado": false emite um cookie de sessão (sem Max-Age).
+    remember: bool = True
 
 
 class LoginOut(BaseModel):
+    """O refresh token NÃO aparece no corpo: ele vive só no cookie HttpOnly."""
+
     access_token: str
-    refresh_token: str
     user: UserOut
-
-
-class RefreshIn(BaseModel):
-    refresh_token: str
 
 
 class RefreshOut(BaseModel):
     access_token: str
-    refresh_token: str
 
 
 class CreateUserIn(BaseModel):
