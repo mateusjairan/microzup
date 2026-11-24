@@ -125,6 +125,7 @@ def test_admin_resets_password_and_revokes_sessions(client) -> None:
     login = client.post(
         "/auth/login", json={"username": "ana.souza", "password": "senha-forte"}
     ).json()
+    assert login["access_token"]
 
     reset = client.post(
         f"/admin/users/{ids['ana.souza']}/password",
@@ -133,7 +134,8 @@ def test_admin_resets_password_and_revokes_sessions(client) -> None:
     )
     assert reset.status_code == 200, reset.text
 
-    old_refresh = client.post("/auth/refresh", json={"refresh_token": login["refresh_token"]})
+    # O reset revoga as sessões: o cookie de refresh da Ana deixa de valer.
+    old_refresh = client.post("/auth/refresh")
     assert old_refresh.status_code == 401
 
     old_login = client.post(

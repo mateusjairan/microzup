@@ -7,7 +7,7 @@ Leia este arquivo antes de qualquer alteração. Ele prevalece sobre hábitos ge
 
 Microzup é um **chat corporativo farmacêutico** para uso na rede local (LAN) da empresa: mensagens e arquivos entre membros de equipe e setores. O produto prioriza rastreabilidade, autoria preservada e ruído baixo — não é um mensageiro de consumo.
 
-**Estado atual:** MVP implementado (M0–M5) — backend completo e cliente desktop Electron. Pendente: empacotamento/instalador final, assinatura e piloto com um setor real.
+**Estado atual:** MVP implementado (M0–M5) — backend completo e cliente **web** (React servido pelo próprio FastAPI). A versão desktop Electron foi descartada; não há shell nativo nem instalador de cliente. Pendente: empacotamento do servidor e piloto com um setor real.
 
 **Fontes de verdade (leia antes de decidir arquitetura):**
 
@@ -23,9 +23,9 @@ Se uma instrução do usuário contradizer os planos, **pergunte** antes de impl
 | Banco | PostgreSQL 17 (`psycopg 3` async, extensões `citext`, `pg_trgm`, `unaccent`) |
 | Backend | Python 3.13 + FastAPI + SQLAlchemy 2.0 async + Alembic + Pydantic v2 |
 | Gerenciador Python | `uv` (com `uv.lock` commitado) |
-| Frontend | Electron + React 19 + TypeScript estrito + Vite + Tailwind 4 + Radix + Zustand |
+| Frontend | React 19 + TypeScript estrito + Vite + Tailwind 4 + Radix + Zustand (SPA servida pelo FastAPI) |
 | Testes | pytest (unit/integration/e2e) + Playwright + axe-core |
-| Empacotamento | PyInstaller + NSSM (servidor) · electron-builder/NSIS (cliente) |
+| Empacotamento | PyInstaller + NSSM (servidor, incluindo `web/dist`) |
 
 Proibido sem aprovação explícita: SQLite, ORM síncrono, Django, Next.js, Redux, TanStack Query junto do Zustand, qualquer CDN em runtime, qualquer serviço externo (a instalação roda **offline**).
 
@@ -33,7 +33,7 @@ Proibido sem aprovação explícita: SQLite, ORM síncrono, Django, Next.js, Red
 
 ```
 server/app/{domain,application,infrastructure,presentation}/   # 4 camadas
-desktop/{electron,src}/                                       # shell + renderer
+web/{src,public,e2e}/                                         # SPA React (build em web/dist)
 docs/                                                          # planos
 scripts/                                                       # dev.ps1, backup.ps1, install-server.ps1
 ```
@@ -67,16 +67,17 @@ uv run pytest -q                     # tudo
 uv run pytest tests/unit -q          # domínio + casos de uso (sem banco)
 uv run pytest tests/integration -q   # repositórios contra Postgres real
 
-# Frontend (a partir de desktop/)
+# Frontend (a partir de web/)
 npm ci
-npm run dev
+npm run dev            # Vite em 5173 com proxy para a API em 8666
 npm run typecheck
-npm run test:e2e
-npm run build
-npm run dist
+npm run test:e2e       # compila e testa o build real servido pelo backend
+npm run build          # gera web/dist (o FastAPI serve em /)
+npm run gen:api
 ```
 
-Portas: API `8666`, Vite `5173`, Postgres `55432` no host (container; 5432 costuma estar ocupada por um Postgres local).
+Portas: API `8666` (também serve o SPA), Vite `5173` (só dev), Postgres `55432` no host (container; 5432 costuma estar ocupada por um Postgres local).
+O servidor falha em servir `/` se `web/dist` não existir: rode `npm run build` antes de subir em produção/piloto.
 Ambiente: Windows + PowerShell; não use sintaxe bash em scripts do repositório.
 
 ## 5. Regras de arquitetura (backend)
@@ -121,7 +122,8 @@ Ambiente: Windows + PowerShell; não use sintaxe bash em scripts do repositório
 - Acessibilidade é requisito: foco visível, `aria-live` para mensagens, presença com texto (nunca só cor), `prefers-reduced-motion` respeitado.
 - Sem CDN, sem fonte remota, sem analytics. Ícones via `lucide-react`; emoji estático curado — **nada animado**.
 - Toda string visível em `src/i18n/pt-BR.ts`; componentes não contêm texto hardcoded.
-- Segurança Electron: `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, IPC por allowlist, CSP sem origem remota, token só em `safeStorage`.
+- Auth web: **access token só em memória**; refresh token em cookie `HttpOnly` + `SameSite=Strict` (path `/auth`). Proibido token em `localStorage`/`sessionStorage`. Mesma origem: nada de CORS por padrão; CSP e headers de segurança são emitidos pelo FastAPI.
+- Recursos que eram do shell (bandeja, janela, diálogo de salvar) viram APIs web: `Notification` (com `onclick` abrindo a conversa), `document.title`/`navigator.setAppBadge`, download por Blob e inatividade observada no documento (`lib/platform.ts`).
 - WebSocket nunca usa o access token na URL: peça ticket em `POST /ws/ticket` antes de conectar ou reconectar.
 - Uploads: valide extensão/tamanho no cliente **e** no servidor; nome de arquivo nunca vira caminho em disco.
 
@@ -174,11 +176,12 @@ Ambiente: Windows + PowerShell; não use sintaxe bash em scripts do repositório
 - `messages.seq` vem do banco; não o simule no cliente.
 - Não confie em `created_at` do cliente para ordenar nada.
 - Sessão expirada deve preservar rascunho do composer.
-- Não rode `npm run dist` em máquina sem certificado assinado esperando instalador "limpo" — o piloto aceita build não assinado, mas registre o aviso do SmartScreen.
+- Sem `web/dist` o backend sobe mas `/` responde 404: o log avisa `web_build_missing`. Servir o SPA é parte do deploy, não um extra.
+- O SPA e a API compartilham a mesma origem; qualquer caminho novo de API precisa entrar no proxy do `vite.config.ts` para funcionar em `npm run dev`.
 
 ## 14. Git
 
-- Commits pequenos, em inglês, Conventional Commits: `feat(server): add message pagination`, `fix(desktop): keep draft on reconnect`, `docs: update mvp roadmap`.
-- Escopos: `server`, `desktop`, `docs`, `infra`.
+- Commits pequenos, em inglês, Conventional Commits: `feat(server): add message pagination`, `fix(web): keep draft on reconnect`, `docs: update mvp roadmap`.
+- Escopos: `server`, `web`, `docs`, `infra`.
 - Não commite `.env`, `node_modules`, `data/`, `dist/`, `*.db`, tokens nem certificados.
 - Não reescreva histórico nem faça force-push em branch compartilhada.

@@ -1,14 +1,17 @@
 # Microzup — Manual da API
 
 > Contrato REST + WebSocket do servidor Microzup, conforme `docs/plano-mvp.md` §5–§7.
-> Estado: **final do MVP** (2026-11-18) — todos os itens previstos no plano §6
-> estão implementados; verifique a cobertura na seção 8.
+> Estado: **final do MVP**, revisado para o cliente web em 2026-11-24 (auth por
+> cookie `HttpOnly`, SPA servida em `/`); a cobertura está na seção 8.
 >
 > Referência viva: o OpenAPI é gerado pelo próprio servidor em `GET /docs`
 > (Swagger UI) e `GET /openapi.json` quando a API está no ar.
 
-- **Base URL (dev):** `http://localhost:8666`
-- **Autenticação:** `Authorization: Bearer <access_token>` (JWT, 15 min por padrão)
+- **Base URL (dev):** `http://localhost:8666` (o mesmo host serve o SPA em `/`)
+- **Autenticação:** `Authorization: Bearer <access_token>` (JWT, 15 min por padrão).
+  O refresh token **não** trafega no corpo: vive em cookie `HttpOnly` +
+  `SameSite=Strict`, `Path=/auth`, emitido por `/auth/login` e rotacionado por
+  `/auth/refresh`. O JavaScript do cliente nunca o vê.
 - **Conteúdo:** `application/json`, exceto `POST /files` (multipart/form-data) e downloads (binário)
 - **Datas:** ISO 8601 em UTC (ex.: `2026-11-18T14:02:11.123456+00:00`)
 - **IDs:** UUID v4
@@ -105,19 +108,26 @@ POST /auth/login
 {
   "username": "ana.souza",
   "password": "senha-forte",
-  "device_name": "PC-QA-03"
+  "device_name": "Edge/Windows",
+  "remember": true
 }
 ```
 
 `username` é case-insensitive (`citext`). `device_name` (opcional, 120 chars)
-aparece no log de auditoria da sessão.
+aparece no log de auditoria da sessão. `remember` (default `true`) controla o
+cookie: `true` = persistente por `REFRESH_TOKEN_TTL_DAYS`; `false` = cookie de
+sessão do navegador (some ao fechar).
 
-**Response 200**
+**Response 200** (+ dois `Set-Cookie`)
+
+```http
+Set-Cookie: mz_refresh=<token>; HttpOnly; SameSite=strict; Path=/auth; Max-Age=2592000
+Set-Cookie: mz_remember=1;     HttpOnly; SameSite=strict; Path=/auth; Max-Age=2592000
+```
 
 ```json
 {
   "access_token": "eyJhbGciOi...",
-  "refresh_token": "b7f3a1c2...",
   "user": {
     "id": "39b25253-7779-4545-b794-dcd8adcf9802",
     "username": "ana.souza",
@@ -135,35 +145,36 @@ em efeito) · `429` `rate_limited` (limite por IP/min).
 
 ### 2.2 `POST /auth/refresh`
 
-Rotaciona o refresh token (o anterior é revogado). O cliente faz isso
-**silenciosamente** quando o access token expira (15 min) — sem perder o
-rascunho do composer.
+Rotaciona o refresh token (o anterior é revogado) e devolve um novo access. O
+cliente faz isso **silenciosamente** quando o access expira (15 min) — sem
+perder o rascunho do composer.
 
-**Request**
-
-```json
-{ "refresh_token": "b7f3a1c2..." }
-```
+**Request:** sem corpo. O cookie `mz_refresh` (path `/auth`) é obrigatório.
+Respostas incluem o novo cookie; `mz_remember` preserva a escolha de
+"manter conectado" feita no login.
 
 **Response 200**
 
 ```json
-{ "access_token": "eyJhbGciOi...", "refresh_token": "c8e4b2d3..." }
+{ "access_token": "eyJhbGciOi..." }
 ```
 
-**Erros:** `401` `invalid_token` (revogado/expirado — cliente deve voltar ao login).
+**Erros:** `401` `invalid_token` (cookie ausente, revogado ou expirado — cliente
+deve voltar ao login). Requisições com `Origin` de outro host também recebem
+`401`.
 
 ### 2.3 `POST /auth/logout`
 
-Revoga a sessão atual. Corpo traz o refresh token a revogar.
+Revoga a sessão atual e apaga os cookies de refresh.
 
-**Request**
+**Request:** sem corpo (lê o cookie `mz_refresh`).
 
-```json
-{ "refresh_token": "c8e4b2d3..." }
-```
+**Response:** `204 No Content` (idempotente, mesmo sem cookie).
 
-**Response:** `204 No Content`
+> **Cookies de sessão:** `Secure` é controlado por `COOKIE_SECURE` (ligue ao
+> adotar TLS). Como o SPA é servido pela própria API, tudo é mesma origem e não
+> há CORS no fluxo normal — a defesa contra CSRF é `SameSite=Strict` + recusa de
+> `Origin` divergente em `refresh`/`logout`.
 
 ### 2.4 `POST /ws/ticket`
 
@@ -745,8 +756,9 @@ para o painel "uso de disco" do admin (plano §2.10).
 - **`GET /health`** → `200 {"status": "ok", "version": "0.1.0"}` (sem banco).
 - **`GET /health/db`** → `200` se `SELECT 1` funciona; `503` se o banco caiu.
 
-O campo **Servidor** do login do cliente testa `/health` antes de habilitar o
-botão Entrar (plano-frontend §4).
+O cliente web não tem campo **Servidor**: ele é servido pelo mesmo host da API,
+então o login já fala com a origem correta. `/health` é usado para diagnóstico e
+monitoramento (e para o app exibir a versão do servidor).
 
 ---
 

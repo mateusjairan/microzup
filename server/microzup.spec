@@ -12,11 +12,18 @@ from PyInstaller.utils.hooks import collect_all
 # com "failed to find libmagic" no primeiro upload.
 magic_datas, magic_binaries, magic_hiddenimports = collect_all("magic")
 
+# O SPA é parte do artefato: `web/dist` entra no bundle e é servido em `/`.
+# Build: `npm run build` em web/ antes de rodar o PyInstaller.
+import os
+
+_web_dist = os.path.join(os.getcwd(), "..", "web", "dist")
+web_datas = [(_web_dist, os.path.join("web", "dist"))] if os.path.isdir(_web_dist) else []
+
 a = Analysis(
     ["app/run.py"],
     pathex=["."],
     binaries=magic_binaries,
-    datas=magic_datas,
+    datas=[*magic_datas, *web_datas],
     hiddenimports=[
         "sqlalchemy.dialects.postgresql.psycopg",
         "psycopg",

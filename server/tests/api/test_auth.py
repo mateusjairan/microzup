@@ -27,25 +27,82 @@ def test_protected_route_requires_token(client) -> None:
     assert response.status_code == 401
 
 
+def test_login_sets_httponly_cookie_and_hides_refresh_token(client) -> None:
+    login = _login(client)
+
+    # O refresh token nunca chega ao JavaScript: só no cookie HttpOnly.
+    assert "refresh_token" not in login
+    set_cookie = client.cookies.get("mz_refresh")
+    assert set_cookie is not None
+    raw = client.post("/auth/login", json={"username": "admin", "password": "admin12345"}).headers[
+        "set-cookie"
+    ]
+    assert "httponly" in raw.lower()
+    assert "samesite=strict" in raw.lower()
+    assert "path=/auth" in raw.lower()
+
+
+def test_login_without_remember_uses_session_cookie(client) -> None:
+    response = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "admin12345", "remember": False},
+    )
+    assert response.status_code == 200
+    assert "max-age" not in response.headers["set-cookie"].lower()
+
+
 def test_refresh_rotates_token(client) -> None:
-    tokens = _login(client)
+    _login(client)
+    old_cookie = client.cookies.get("mz_refresh")
+    assert old_cookie is not None
 
-    refreshed = client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+    refreshed = client.post("/auth/refresh")
     assert refreshed.status_code == 200
-    assert refreshed.json()["refresh_token"] != tokens["refresh_token"]
+    assert "access_token" in refreshed.json()
+    new_cookie = client.cookies.get("mz_refresh")
+    assert new_cookie is not None and new_cookie != old_cookie
 
-    # O refresh antigo não funciona mais.
-    replay = client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+    # O refresh antigo (cookie anterior) não funciona mais.
+    client.cookies.set("mz_refresh", old_cookie, path="/auth")
+    replay = client.post("/auth/refresh")
     assert replay.status_code == 401
 
 
+def test_refresh_preserves_session_only_choice(client) -> None:
+    response = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "admin12345", "remember": False},
+    )
+    assert response.status_code == 200
+
+    refreshed = client.post("/auth/refresh")
+    assert refreshed.status_code == 200
+    # Rotação NÃO promove a sessão do navegador a cookie persistente.
+    assert "max-age" not in refreshed.headers["set-cookie"].lower()
+
+
+def test_refresh_without_cookie_returns_401(client) -> None:
+    response = client.post("/auth/refresh")
+    assert response.status_code == 401
+
+
+def test_refresh_rejects_cross_origin(client) -> None:
+    _login(client)
+    response = client.post("/auth/refresh", headers={"Origin": "http://evil.example"})
+    assert response.status_code == 401
+
+
 def test_logout_revokes_session(client) -> None:
-    tokens = _login(client)
+    _login(client)
+    cookie = client.cookies.get("mz_refresh")
+    assert cookie is not None
 
-    logout = client.post("/auth/logout", json={"refresh_token": tokens["refresh_token"]})
+    logout = client.post("/auth/logout")
     assert logout.status_code == 204
+    assert client.cookies.get("mz_refresh") is None
 
-    replay = client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+    client.cookies.set("mz_refresh", cookie, path="/auth")
+    replay = client.post("/auth/refresh")
     assert replay.status_code == 401
 
 

@@ -14,18 +14,13 @@ regulada.
 `server/` (identidade, conversas, mensagens idempotentes, arquivos com dedupe e
 prévia 480 px, busca full-text + nome de arquivo, auditoria append-only com
 envelope de erro universal, estatísticas com disco, retenção opcional auditada)
-e cliente desktop Electron em `desktop/` (login, 3 painéis, presença, envio
-otimista, anexos, busca, WS com reconexão, painel admin). Pendências conhecidas:
+e cliente **web** em `web/` (login, 3 painéis, presença, envio otimista, anexos,
+busca, WS com reconexão, painel admin), servido pelo próprio FastAPI. Pendências:
 
-- Assinatura de código: o piloto aceita build não assinado (aviso do SmartScreen
-  documentado na seção 4.1 de [`docs/operacao.md`](docs/operacao.md)); o
-  executável do servidor já foi validado (33,6 MB, health 200, envelope no 401);
-- Instalador NSIS: em uma estação o assistente trava em "Instalando" (~63%) sem
-  escrever no destino — causa raiz não reproduzida fora dela. Procedimento de
-  recuperação e instalação manual por cópia do `win-unpacked` na seção 4.2 de
-  [`docs/operacao.md`](docs/operacao.md);
 - Piloto real com um setor (critérios de aceite no plano-mvp §9 — backup/restore
-  já testado de ponta a ponta, ver a seção 3.3 de [`docs/operacao.md`](docs/operacao.md)).
+  já testado de ponta a ponta, ver a seção 3.3 de [`docs/operacao.md`](docs/operacao.md));
+- Instalação do servidor como serviço do Windows incluindo o build do SPA;
+- Regressão visual no navegador (baselines Electron removidos junto com o shell).
 
 ## Stack
 
@@ -34,10 +29,10 @@ otimista, anexos, busca, WS com reconexão, painel admin). Pendências conhecida
 | Banco | PostgreSQL 17 (`psycopg 3` async; extensões `citext`, `pg_trgm`, `unaccent`) |
 | Backend | Python 3.13 · FastAPI · SQLAlchemy 2.0 async · Alembic · Pydantic v2 |
 | Gerenciador Python | `uv` (`uv.lock` commitado) |
-| Frontend | Electron · React 19 · TypeScript estrito · Vite · Tailwind 4 · Radix · Zustand |
+| Frontend | React 19 · TypeScript estrito · Vite · Tailwind 4 · Radix · Zustand (SPA servida pelo backend) |
 | Testes backend | pytest (unit/integration/e2e contra Postgres real) |
-| Testes frontend | Playwright + axe-core (Electron real, suíte em `desktop/e2e/`) |
-| Empacotamento | PyInstaller + NSSM (servidor) · electron-builder/NSIS (cliente) |
+| Testes frontend | Playwright + axe-core (build real servido pelo backend, suíte em `web/e2e/`) |
+| Empacotamento | PyInstaller + NSSM (servidor, incluindo `web/dist`) |
 
 Arquitetura em 4 camadas (`presentation → application → domain ← infrastructure`),
 casos de uso com transação única, repositórios via ports e auditoria por eventos —
@@ -58,7 +53,7 @@ detalhes em [`docs/plano-mvp.md`](docs/plano-mvp.md).
 
 ```
 server/     API, domínio, aplicação, infraestrutura, migrations e testes
-desktop/    app Electron (electron/) + renderer React (src/)
+web/        SPA React (src/) + build servido pelo backend (dist/) + E2E
 docs/       planos, manual da API e guia de operação
 scripts/    dev.ps1 · backup.ps1 · restore.ps1 · install-server.ps1 · open-firewall.ps1
 ```
@@ -100,28 +95,27 @@ uv run python -m app.cli create-admin --username admin
 
 Acesso de outras máquinas da LAN: `http://<IP-do-servidor>:8666` — libere a porta
 TCP 8666 no firewall com `.\scripts\open-firewall.ps1` (PowerShell como
-administrador) e informe o endereço no campo **Servidor** do cliente.
+administrador). O navegador abre a SPA e a API na mesma origem.
 
-### Cliente desktop
+### Cliente web
 
 ```powershell
-cd desktop
+cd web
 npm ci
-npm run dev          # Vite + Electron (desenvolvimento)
-npm run typecheck    # renderer + processo main (electron/)
-npm run build        # renderer + main
-npm run dist         # instalador NSIS em desktop\release
+npm run dev          # Vite em 5173 com proxy para a API em 8666
+npm run typecheck
+npm run build        # gera web/dist (servido pelo FastAPI em /)
 npm run gen:api      # regenera os tipos TS do contrato a partir do OpenAPI do servidor
-npm run test:e2e     # E2E: login, retry, scroll, reconexão, upload 50 MB, atalhos, axe, visual
+npm run test:e2e     # E2E contra o build real: login, retry, scroll, reconexão, upload 50 MB, atalhos, axe
 ```
 
 O painel de administração (usuários, setores, canais, auditoria, uso de disco)
-fica no próprio cliente, visível apenas para papel `admin`.
+fica na própria SPA, visível apenas para papel `admin`.
 
-Na primeira execução o cliente abre apontando para a **LAN**
-(`http://192.168.10.17:8666`) em vez de `localhost` — é o endereço da estação
-servidora neste piloto. O campo **Servidor** do login troca isso sem rebuild;
-IP fixo, variável de ambiente e verificação na seção 4.3 de
+Em produção o único artefato de cliente é `web/dist`: rode `npm run build` e suba
+o servidor. Sem o build, `/` responde 404 e o log avisa `web_build_missing`.
+Autenticação: access token em memória e refresh token em cookie `HttpOnly` —
+nada de token no `localStorage`. Detalhes de deploy na seção 4 de
 [`docs/operacao.md`](docs/operacao.md).
 
 ### Qualidade e testes (server/)

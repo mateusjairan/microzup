@@ -18,8 +18,8 @@
 | Disco | `STORAGE_DIR` para anexos (planeje 100 GB no piloto) |
 | Portas | **8666/TCP** (API, liberar no firewall p/ LAN) · **55432/TCP** (Postgres do container, **só localhost**) |
 
-**Cliente (estações):** Windows 10/11; nenhuma dependência instalada — o
-instalador NSIS empacota tudo (§4).
+**Cliente (estações):** Windows 10/11 com navegador moderno (Edge/Chrome); nenhuma
+dependência instalada — o SPA é servido pelo backend (§4).
 
 > **Porta 55432 vs 5432:** o container do Postgres publica **55432 no host**
 > (dentro do container é 5432). A 5432 costuma estar ocupada por um Postgres
@@ -160,10 +160,11 @@ Na máquina do servidor, PowerShell **como administrador**:
 .\scripts\open-firewall.ps1 -Port 8666 -RemoteAddress 192.168.0.0/24
 ```
 
-O cliente já abre com `http://192.168.10.17:8666` como endereço **padrão** na
-primeira execução (o IP da estação servidora neste piloto — §4.3); o campo
-**Servidor** do login permite trocar sem rebuild. O plano é HTTP puro na LAN
-(decisão documentada — TLS na fase 2); restrinja a regra à sub-rede corporativa.
+As estações abrem `http://<IP-do-servidor>:8666` no navegador — não há campo
+**Servidor** nem descoberta automática: a página é servida pelo próprio backend.
+Se o IP mudar, o endereço muda apenas no favorito/atalho. O plano é HTTP puro na
+LAN (decisão documentada — TLS na fase 2); restrinja a regra à sub-rede
+corporativa.
 
 ---
 
@@ -340,148 +341,65 @@ escolha um dos dois modos.
 
 ---
 
-## 4. Empacotamento do cliente (Electron/NSIS)
+## 4. Deploy do cliente web
 
-Em `desktop/`:
+O cliente é uma SPA React servida pelo próprio backend. Não há instalador de
+cliente, assinatura de código, SmartScreen nem `node_modules` nas estações: a TI
+só precisa liberar a porta **8666/TCP** e apontar o navegador para
+`http://<IP-do-servidor>:8666`.
+
+### 4.1 Build
+
+Na máquina com internet (build), a partir de `web/`:
 
 ```powershell
 npm ci
-npm run build        # renderer (Vite)
-npm run dist         # vite build + electron-builder → desktop\release\
+npm run typecheck
+npm run build        # gera web/dist (HTML, JS, CSS, fontes, ícones)
 ```
 
-- Target: **NSIS x64** (`appId com.microzup.desktop`, `productName Microzup`),
-  instalador assistido (`oneClick: false`, diretório escolhível).
-- Ícones em `desktop\build\` (`icon.ico` para o instalador/app, `tray-16.png`
-  para a bandeira) — adicionados durante a sprint; valide no `npm run dist`.
-- O renderer é carregado via `file://` (origem `null` — já prevista em
-  `CORS_ORIGINS`); nada de CDN/fonte remota: build e dependências saem da
-  máquina com internet, a estação roda offline.
+Copie `web/dist` junto do servidor. O FastAPI detecta a pasta em `WEB_DIST_DIR`
+(padrão `web/dist`, relativo à raiz do repositório) e a monta em `/`. Sem o
+build, o backend sobe normalmente e `/` responde **404**, com o aviso
+`web_build_missing` no log — sirva o SPA é parte do deploy, não um extra.
 
-### 4.1 Assinatura de código e SmartScreen
+### 4.2 Atualização
 
-O piloto **aceita build não assinado** (decisão registrada no plano/AGENTS.md
-§13). Sem certificado, o Windows mostra no primeiro uso:
+Substituir `web/dist` e reiniciar o serviço entrega a versão nova a todas as
+estações no próximo carregamento (F5); não há auto-update de cliente. Os assets
+têm hash no nome, então o navegador não serve JS antigo depois da troca. O banner
+"nova versão do servidor" continua funcionando pelo `server.hello` do WebSocket.
 
-> "O Windows protegeu o computador — Microsoft Defender SmartScreen impediu o
-> início de um aplicativo não reconhecido."
+### 4.3 Cache e offline
 
-Procedimento aceito no piloto: *Mais informações → Execitar assim mesmo*
-(ou liberar por GPO/antivírus corporativo). Registre o aviso no roteiro de
-instalação dos usuários; a assinatura com certificado interno (ou liberação por
-GPO) é tratada antes da fase 2. **Não** rode `npm run dist` em máquina com
-certificado esperando um instalador "limpo" sem configurar a assinatura.
+- O SPA é estático; o backend envia `Cache-Control` padrão do `StaticFiles`.
+- Não há service worker/PWA no MVP: sem rede, a página não abre. O rascunho e a
+  fila de envio continuam no `localStorage` do navegador e são reenviados com o
+  mesmo `client_id` ao reconectar.
+- Limpar dados do site apaga preferências e outbox, mas **não** encerra a sessão
+  se o cookie de refresh for preservado; "Sair" no app revoga a sessão no servidor.
 
-### 4.2 Instalador travado ("Instalando" em ~63%) e instalação manual
+### 4.4 Sessão e cookies
 
-**Sintoma:** o assistente abre, a pasta é aceita, mas ao clicar em **Instalar** a
-barra congela (observado em ~63%) e nada é escrito no destino; às vezes o
-processo desaparece sem instalar e sem mensagem de erro.
+- `POST /auth/login` devolve o access na resposta e grava o refresh em cookie
+  `HttpOnly` + `SameSite=Strict`, path `/auth`, 30 dias (ou cookie de sessão se
+  "Manter conectado" estiver desmarcado).
+- `POST /auth/refresh` e `POST /auth/logout` leem o cookie; nenhum token aparece
+  no corpo dessas respostas nem no JavaScript.
+- Em HTTP puro na LAN, `COOKIE_SECURE=false`. Ao migrar para TLS, defina
+  `COOKIE_SECURE=true` e sirva o SPA pelo mesmo host HTTPS (o WebSocket vira `wss`).
+- Navegador com cookies bloqueados ou modo restrito impede o login persistente:
+  o app volta à tela de login a cada recarregamento.
 
-**O que já foi descartado** (medido na estação, 2026-11-19):
+### 4.5 Origens, proxy e firewall
 
-| Hipótese | Medida |
-|---|---|
-| Instalador corrompido | `7z t` → *Everything is Ok* (payload completo) |
-| Payload truncado | `app-64.7z` descompacta 409 MB em ~2 s |
-| Disco cheio | o próprio assistente mostra 91,3 GB livres antes de instalar |
-| Template do electron-builder divergente | idêntico ao upstream (26.18.0) |
+- Produção: mesma origem, `CORS_ORIGINS` vazio.
+- Dev: `npm run dev` sobe o Vite em `5173` e faz proxy de `/auth`, `/me`,
+  `/users`, `/admin`, `/sectors`, `/conversations`, `/messages`, `/files`,
+  `/search`, `/health` e `/ws` para `127.0.0.1:8666`. Caminho novo de API precisa
+  entrar nessa lista para funcionar em dev.
+- Firewall: `.\scripts\open-firewall.ps1` (PowerShell como administrador).
 
-A causa raiz **não foi fechada**: dois caminhos de extração diferentes (payload
-7z e payload zip) travam no mesmo ponto, com CPU do processo em 0 s e as
-threads em espera de mensagem — o que aponta para o ambiente da estação, não
-para o artefato.
-
-**Antes de reinstalar, elimine as duas causas de arquivo em uso:**
-
-1. **Nenhuma instância aberta.** O app pode estar minimizado na bandeja
-   (`closeToTray`): encerre pelo Gerenciador de Tarefas (processo `Microzup.exe`,
-   com os filhos `--type=renderer`/`--type=gpu-process`).
-2. **Versão anterior desinstalada.** O instalador executa o desinstalador
-   anterior antes de extrair; com arquivos em uso ele repete a operação e o
-   assistente fica parado.
-   ```powershell
-   & "$env:LOCALAPPDATA\Programs\Microzup\Uninstall Microzup.exe"
-   ```
-
-**Instalação manual (sem NSIS)** — copia o payload já empacotado e recria os
-atalhos. Funciona sempre e não depende de elevação:
-
-```powershell
-# com o app FECHADO
-$dst = "$env:LOCALAPPDATA\Programs\Microzup"
-Copy-Item .\desktop\release\win-unpacked\* $dst -Recurse -Force
-
-$exe = Join-Path $dst "Microzup.exe"
-$ws = New-Object -ComObject WScript.Shell
-$atalhos = @(
-  (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Microzup.lnk'),
-  (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Microzup.lnk')
-)
-foreach ($lnk in $atalhos) {
-  $s = $ws.CreateShortcut($lnk); $s.TargetPath = $exe; $s.WorkingDirectory = $dst; $s.Save()
-}
-```
-
-Regras da instalação manual:
-
-- copie **`Microzup.exe` e `resources\app.asar` juntos** — o electron-builder
-  embute o hash de integridade do asar no executável; trocar só um dos dois faz
-  a validação falhar no boot;
-- ela **não** cria entrada em *Aplicativos e recursos*; o próximo `Setup` trata
-  a pasta como instalação limpa (sem desinstalador anterior para rodar);
-- para atualizar depois de um `npm run build`, repita a cópia (é o mesmo
-  payload que o instalador distribuiria).
-
-### 4.3 Endereço padrão do servidor (LAN)
-
-O padrão **não é mais `localhost`**: o piloto roda em LAN, o servidor fica numa
-máquina e o cliente nas estações — em qualquer estação que não seja a do
-servidor, `localhost` aponta para a própria estação e a primeira execução falha.
-O padrão embutido é `http://192.168.10.17:8666` (IP da máquina servidora).
-
-Precedência (a primeira que existir vence):
-
-1. **Campo Servidor** do login, persistido em
-   `%APPDATA%\microzup-desktop\settings.json` (electron-store) — troca sem
-   rebuild;
-2. `MICROZUP_SERVER_URL` no ambiente (lido pelo processo main quando ainda não
-   há endereço salvo);
-3. o padrão de LAN embutido.
-
-> **Migração única:** estações que já rodaram uma versão antiga têm
-> `http://localhost:8666` gravado em `settings.json` e ficariam presas nele. Na
-> primeira execução do build atual esse valor legado é trocado pelo padrão de
-> LAN uma vez só (flag `serverUrlMigratedToLan`), e a partir daí o que o usuário
-> digitar é respeitado — a migração não reescreve de novo.
->
-> O `config.json` na mesma pasta é o config **legado** do main.js antigo; ele
-> só é lido quando ainda não existe `settings.json` (e então renomeado para
-> `config.json.migrated`).
-
-Onde vive, se precisar mudar para outro servidor:
-
-| Arquivo | Papel |
-|---|---|
-| `desktop/electron/ipc-contract.ts` (`DEFAULT_SERVER_URL`) | padrão usado pelo app empacotado (main process) |
-| `desktop/src/lib/bridge.ts` (`FALLBACK_SERVER`) | só no fallback de navegador/`vite` puro; aceita `VITE_SERVER_URL` |
-
-> **IP fixo:** o padrão é um endereço literal. Se o servidor pegar outro IP por
-> DHCP, ajuste a reserva no roteador (ou o IP estático) **ou** troque no campo
-> Servidor de cada estação. Rebuildar com `MICROZUP_SERVER_URL` também funciona,
-> mas o campo do login é o caminho sem deploy.
-
-Para testar a estação servidora depois de mudar algo:
-
-```powershell
-Invoke-RestMethod http://192.168.10.17:8666/health   # 200 + {"status":"ok",...}
-Get-NetFirewallRule -DisplayName "Microzup API (8666)" | Select-Object Enabled,Action
-```
-
-A suíte E2E **não** depende desse padrão: `e2e/app.ts` preenche o campo Servidor
-com `BASE_URL` (`127.0.0.1:8666`) em todo login.
-
----
 
 ## 5. Logs e rotação
 
@@ -525,7 +443,9 @@ abaixo e em `config.py` **na mesma alteração**.
 | `RATE_LIMIT_LOGIN_PER_MINUTE` | `10` | tentativas de login por IP/min |
 | `RATE_LIMIT_UPLOAD_PER_MINUTE` | `20` | uploads por usuário/min |
 | `RATE_LIMIT_MESSAGE_PER_MINUTE` | `30` | mensagens por usuário/min |
-| `CORS_ORIGINS` | `http://localhost:5173` | origens permitidas, separadas por vírgula (inclua `null` para o Electron instalado) |
+| `CORS_ORIGINS` | vazio | origens permitidas, separadas por vírgula; vazio = mesma origem (SPA servida pela API) |
+| `WEB_DIST_DIR` | `web/dist` | build do SPA servido em `/` |
+| `COOKIE_SECURE` | `false` | cookie de refresh com `Secure` (ligue ao migrar para TLS) |
 | `STORAGE_DIR` | `./data` | raiz de anexos (`files/`), prévias (`thumbs/`) e logs |
 | `MAX_UPLOAD_MB` | `100` | limite por arquivo |
 | `MAX_ATTACHMENTS_PER_MESSAGE` | `5` | limite por mensagem |
@@ -573,7 +493,7 @@ falham explicitamente sem banco, por decisão).
 ### 7.3 401 após ~15 minutos (token expirado)
 
 Comportamento **esperado**: access token vale `ACCESS_TOKEN_TTL_MINUTES` (15).
-O cliente desktop já trata isso sozinho: **refresh proativo** com margem antes
+O cliente web já trata isso sozinho: **refresh proativo** com margem antes
 da expiração e, num eventual `401`, um único refresh + retry da chamada original
 (uploads inclusos) — sem deslogar, sem perder o rascunho do composer. Só quando
 o próprio refresh falha (`invalid_token`) a sessão expira de verdade e o cliente
@@ -646,43 +566,41 @@ psycopg async não funciona com Proactor no Windows.
 escolhe Selector sozinho (por isso `scripts/dev.ps1` e o comando canônico do
 README funcionam).
 
-### 7.11 Cliente não abre: `Cannot read properties of undefined (reading 'requestSingleInstanceLock')`
+### 7.11 SPA responde 404 na raiz (`/`)
 
-**Sintoma:** `npm run dev`/`npm start` (ou o `.exe` chamado a partir desse
-terminal) morre em menos de um segundo, sem janela. No console aparece o
-stack trace acima, com `electron_1.app` **undefined**.
+**Sintoma:** o navegador abre `http://<servidor>:8666` e recebe 404 (ou JSON de
+erro), embora `/health` responda 200.
 
-**Causa:** o terminal de origem está hospedado por outro app Electron (VS Code,
-outro harness etc.) e exporta **`ELECTRON_RUN_AS_NODE=1`**. A variável é
-herdada: o binário do Electron passa a rodar como **Node puro**, então
-`require("electron")` devolve o *caminho do executável* em vez da API — `app`,
-`BrowserWindow` e companhia ficam `undefined`.
+**Causa:** `web/dist` não existe ou `WEB_DIST_DIR` aponta para o lugar errado. O
+backend sobe normalmente e registra `web_build_missing` no log.
 
-**Diagnóstico:**
+**Correção:**
 
 ```powershell
-Get-ChildItem Env: | Where-Object Name -like '*ELECTRON*'   # ELECTRON_RUN_AS_NODE 1 = causa
+cd web
+npm run build
+Test-Path dist\index.html   # precisa ser True
 ```
 
-**Correção:** os scripts `dev` e `start` do `desktop/package.json` passam por
-`scripts/run-electron.mjs`, que **remove** a variável antes de subir o Electron.
-Se você chama `electron .` na mão, limpe a variável na sessão:
+Reinicie o serviço. Em desenvolvimento, use o Vite (`npm run dev`, porta 5173)
+ou compile antes de abrir a 8666.
 
-```powershell
-Remove-Item Env:ELECTRON_RUN_AS_NODE   # só nesta janela
-```
+### 7.12 Login não persiste: volta para a tela de login ao recarregar
 
-Não adianta `cross-env ELECTRON_RUN_AS_NODE=`: valor vazio ainda conta como
-definida para o Electron.
+**Sintoma:** o login funciona, mas F5 (ou uma nova aba) pede credenciais de novo.
 
-### 7.12 Instalador do cliente trava no meio
+**Causas prováveis:**
 
-**Sintoma:** o assistente do `Microzup Setup <versão>.exe` para em "Instalando"
-(~63%) ou some sem instalar nada.
+1. Cookie de refresh bloqueado pelo navegador (modo restrito, política de
+   cookies de terceiros quebrada, extensão de privacidade);
+2. `COOKIE_SECURE=true` com o piloto ainda em HTTP — o navegador descarta o
+   cookie `Secure` em origem `http://`;
+3. SPA e API em hosts diferentes (ex.: SPA em outro servidor estático): o cookie
+   é do host da API e o navegador não o envia no `fetch`.
 
-**Correção:** veja §4.2 — feche a instância (inclusive a da bandeja), rode o
-desinstalador antigo quando houver, e use a instalação manual por cópia do
-`win-unpacked` se o NSIS insistir.
+**Diagnóstico:** DevTools → Application → Cookies. Deve existir `mz_refresh` com
+`HttpOnly`, `SameSite=Strict` e `Path=/auth`. O `document.cookie` **não** mostra
+esse cookie (é o comportamento correto).
 
 ---
 

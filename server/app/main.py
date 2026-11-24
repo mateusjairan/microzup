@@ -1,11 +1,13 @@
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import __version__
@@ -176,13 +178,16 @@ def create_app() -> FastAPI:
     app.state.settings = settings
     app.state.version = __version__
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origin_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    # Mesma origem por padrão (o SPA é servido por esta API): sem CORS.
+    if settings.cors_origin_list:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origin_list,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
     install_error_handlers(app)
     app.include_router(health_router)
     app.include_router(auth_router)
@@ -194,7 +199,48 @@ def create_app() -> FastAPI:
     app.include_router(messages_router)
     app.include_router(files_router)
     app.include_router(ws_router)
+
+    _install_security_headers(app)
+    _mount_web_app(app, settings.web_dist_path())
     return app
+
+
+# CSP compatível com o SPA (sem origem remota, sem CDN): scripts só do próprio
+# host; estilos inline são necessários para os atributos `style` do Radix.
+CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob:; "
+    "font-src 'self' data:; "
+    "connect-src 'self' ws: wss:; "
+    "media-src 'self' blob:; "
+    "object-src 'none'; "
+    "base-uri 'none'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+
+
+def _install_security_headers(app: FastAPI) -> None:
+    @app.middleware("http")
+    async def security_headers(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault("Content-Security-Policy", CSP)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        return response
+
+
+def _mount_web_app(app: FastAPI, dist: Path) -> None:
+    """Serve o build do SPA em `/` — um único processo/porta na LAN."""
+    if not (dist / "index.html").is_file():
+        _log.warning("web_build_missing", path=str(dist), hint="rode `npm run build` em web/")
+        return
+    app.mount("/", StaticFiles(directory=dist, html=True), name="web")
 
 
 app = create_app()
